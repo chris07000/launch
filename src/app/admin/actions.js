@@ -2,49 +2,39 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+
+// Get the OS temporary directory
+const tmpDir = os.tmpdir();
+
+// Constants for file paths
+const ORDERS_FILE = path.join(tmpDir, 'orders.json');
 
 export async function updateOrderStatus(orderId, status) {
   try {
-    const ordersFile = '/tmp/orders.json';
-    let orders = {};
-    
-    if (fs.existsSync(ordersFile)) {
-      const ordersData = fs.readFileSync(ordersFile, 'utf8');
-      orders = JSON.parse(ordersData || '{}');
+    const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf8') || '[]');
+    const order = orders.find(o => o.id === orderId);
+    if (order) {
+      order.status = status;
+      fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2));
+      return { success: true };
     }
-
-    if (orders[orderId]) {
-      orders[orderId].status = status;
-      fs.writeFileSync(ordersFile, JSON.stringify(orders, null, 2));
-      return true;
-    }
-    
-    return false;
+    return { success: false, error: 'Order not found' };
   } catch (error) {
     console.error('Error updating order status:', error);
-    return false;
+    return { success: false, error: error.message };
   }
 }
 
 export async function debugOrders() {
   try {
-    const ordersFile = '/tmp/orders.json';
-    let orders = {};
-    
-    if (fs.existsSync(ordersFile)) {
-      const ordersData = fs.readFileSync(ordersFile, 'utf8');
-      orders = JSON.parse(ordersData || '{}');
+    if (!fs.existsSync(ORDERS_FILE)) {
+      return { success: false, error: 'Orders file not found' };
     }
-    
-    return {
-      success: true,
-      count: Object.keys(orders).length,
-      orders
-    };
+    const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf8') || '[]');
+    return { success: true, orders };
   } catch (error) {
-    return {
-      success: false,
-      error: error.message
-    };
+    console.error('Error reading orders:', error);
+    return { success: false, error: error.message };
   }
 } 

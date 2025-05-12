@@ -1,15 +1,19 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { Order, Batch, WhitelistEntry, MintedWallet } from './types';
 
+// Get the OS temporary directory
+const tmpDir = os.tmpdir();
+
 // Constants for file paths
-const ORDERS_FILE = '/tmp/orders.json';
-const BATCHES_FILE = '/tmp/batches.json';
-const WHITELIST_FILE = '/tmp/whitelist.json';
-const MINTED_WALLETS_FILE = '/tmp/minted-wallets.json';
+const ORDERS_FILE = path.join(tmpDir, 'orders.json');
+const BATCHES_FILE = path.join(tmpDir, 'batches.json');
+const WHITELIST_FILE = path.join(tmpDir, 'whitelist.json');
+const MINTED_WALLETS_FILE = path.join(tmpDir, 'minted-wallets.json');
 
 // Helper function to ensure directory exists
-function ensureDirectoryExists(filePath: string) {
+export function ensureDirectoryExists(filePath: string) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -17,7 +21,7 @@ function ensureDirectoryExists(filePath: string) {
 }
 
 // Helper function to read JSON file
-function readJsonFile<T>(filePath: string): T | null {
+export function readJsonFile<T>(filePath: string): T | null {
   try {
     ensureDirectoryExists(filePath);
     if (!fs.existsSync(filePath)) {
@@ -32,7 +36,7 @@ function readJsonFile<T>(filePath: string): T | null {
 }
 
 // Helper function to write JSON file
-function writeJsonFile<T>(filePath: string, data: T): boolean {
+export function writeJsonFile<T>(filePath: string, data: T): boolean {
   try {
     ensureDirectoryExists(filePath);
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));

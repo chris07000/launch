@@ -1,14 +1,21 @@
-import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
-import { 
-  getOrders, 
-  saveOrders, 
-  getBatches,
-  saveBatches
-} from '@/lib/storage';
-import { Order, Batch } from '@/lib/types';
-import { Order as OrderType } from '@/lib/types';
+import os from 'os';
+import { readJsonFile, writeJsonFile } from '../lib/storage';
+import { Order } from '../lib/types';
+
+// Get the OS temporary directory
+const tmpDir = os.tmpdir();
+
+// Constants for file paths
+const ORDERS_FILE = path.join(tmpDir, 'orders.json');
+const USED_TRANSACTIONS_FILE = path.join(tmpDir, 'used-transactions.json');
+
+interface UsedTransaction {
+  orderId: string;
+  amount: number;
+  timestamp: string;
+}
 
 // Batches configuratie
 interface BatchConfig {
@@ -28,51 +35,6 @@ interface Inscription {
   imageUrl: string;
   batchId: number;
   assignedToOrder?: string; // Order ID if assigned
-}
-
-// Constants for file paths
-const ORDERS_FILE = '/tmp/orders.json';
-const USED_TRANSACTIONS_FILE = '/tmp/used-transactions.json';
-
-interface UsedTransaction {
-  orderId: string;
-  amount: number;
-  timestamp: string;
-}
-
-// Helper function to ensure directory exists
-function ensureDirectoryExists(filePath: string) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
-
-// Helper function to read JSON file
-function readJsonFile<T>(filePath: string): T | null {
-  try {
-    ensureDirectoryExists(filePath);
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    const data = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(data || '{}');
-  } catch (error) {
-    console.error(`Error reading ${filePath}:`, error);
-    return null;
-  }
-}
-
-// Helper function to write JSON file
-function writeJsonFile<T>(filePath: string, data: T): boolean {
-  try {
-    ensureDirectoryExists(filePath);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-    return true;
-  } catch (error) {
-    console.error(`Error writing ${filePath}:`, error);
-    return false;
-  }
 }
 
 // File path for persisting inscriptions

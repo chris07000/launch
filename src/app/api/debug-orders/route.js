@@ -1,41 +1,23 @@
-import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { NextResponse } from 'next/server';
+
+// Get the OS temporary directory
+const tmpDir = os.tmpdir();
+
+// Constants for file paths
+const ORDERS_FILE = path.join(tmpDir, 'orders.json');
 
 export async function GET() {
   try {
-    const ordersFile = '/tmp/orders.json';
-    
-    if (!fs.existsSync(ordersFile)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Orders file does not exist',
-        path: ordersFile
-      });
+    if (!fs.existsSync(ORDERS_FILE)) {
+      return NextResponse.json({ success: false, error: 'Orders file not found' });
     }
-    
-    const ordersData = fs.readFileSync(ordersFile, 'utf8');
-    let orders;
-    
-    try {
-      orders = JSON.parse(ordersData || '{}');
-    } catch (e) {
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to parse orders JSON',
-        rawData: ordersData
-      });
-    }
-    
-    return NextResponse.json({
-      success: true,
-      count: Object.keys(orders).length,
-      orders: orders
-    });
+    const orders = JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf8') || '[]');
+    return NextResponse.json({ success: true, orders });
   } catch (error) {
-    return NextResponse.json({
-      success: false,
-      error: error.message
-    }, { status: 500 });
+    console.error('Error reading orders:', error);
+    return NextResponse.json({ success: false, error: error.message });
   }
 } 
