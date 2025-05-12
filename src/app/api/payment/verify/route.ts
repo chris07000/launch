@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrderStatus, updateOrderStatus, isTransactionUsed, markTransactionAsUsed } from '@/api/mint';
+import * as storage from '@/lib/storage-wrapper';
 import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
@@ -183,12 +184,24 @@ export async function POST(request: NextRequest) {
       // Update order status to paid
       await updateOrderStatus(orderId, 'paid');
       
-      // Update batch minted_wallets count
-      await sql`
-        UPDATE batches 
-        SET minted_wallets = minted_wallets + 1 
-        WHERE id = ${orderStatus.batchId}
-      `;
+      // Update batch minted_wallets count in database and increment by 1
+      const batches = await storage.getBatches();
+      const batchIndex = batches.findIndex(b => b.id === orderStatus.batchId);
+      
+      if (batchIndex !== -1) {
+        batches[batchIndex].mintedWallets += 1;
+        await storage.saveBatches(batches);
+      }
+      
+      // Add wallet to minted_wallets list
+      const mintedWallets = await storage.getMintedWallets();
+      mintedWallets.push({
+        address: orderStatus.btcAddress,
+        batchId: orderStatus.batchId,
+        quantity: orderStatus.quantity,
+        timestamp: new Date().toISOString()
+      });
+      await storage.saveMintedWallets(mintedWallets);
       
       // Start inscription process in the background
       startInscriptionProcess(orderId).catch(error => {
@@ -229,15 +242,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the order from the database
-    const { rows } = await sql`
-      SELECT * FROM orders WHERE payment_reference = ${reference}
-    `;
-
-    if (rows.length === 0) {
+    const orders = await storage.getOrders();
+    const order = orders.find(o => o.paymentReference === reference);
+    
+    if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
-
-    const order = rows[0];
 
     // Check if payment is already marked as completed
     if (order.status === 'completed') {
@@ -249,26 +259,26 @@ export async function GET(request: NextRequest) {
     
     if (paymentResult.confirmed) {
       // Update order status
-      await sql`
-        UPDATE orders 
-        SET status = 'completed', updated_at = CURRENT_TIMESTAMP 
-        WHERE payment_reference = ${reference}
-      `;
+      await updateOrderStatus(order.id, 'completed');
 
       // Update batch minted_wallets count
-      await sql`
-        UPDATE batches 
-        SET minted_wallets = minted_wallets + 1 
-        WHERE id = ${order.batch_id}
-      `;
+      const batches = await storage.getBatches();
+      const batchIndex = batches.findIndex(b => b.id === order.batchId);
+      
+      if (batchIndex !== -1) {
+        batches[batchIndex].mintedWallets += 1;
+        await storage.saveBatches(batches);
+      }
 
-      // Add to minted_wallets table
-      await sql`
-        INSERT INTO minted_wallets (address, batch_id, quantity)
-        VALUES (${order.btc_address}, ${order.batch_id}, ${order.quantity})
-        ON CONFLICT (address, batch_id) 
-        DO UPDATE SET quantity = minted_wallets.quantity + EXCLUDED.quantity
-      `;
+      // Add to minted_wallets list
+      const mintedWallets = await storage.getMintedWallets();
+      mintedWallets.push({
+        address: order.btcAddress,
+        batchId: order.batchId,
+        quantity: order.quantity,
+        timestamp: new Date().toISOString()
+      });
+      await storage.saveMintedWallets(mintedWallets);
 
       return NextResponse.json({ status: 'completed' });
     }
