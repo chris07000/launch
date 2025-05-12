@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       // Calculate available slots for each batch based on whitelist
       batches = batches.map(batch => ({
         ...batch,
-        available: whitelistedAddresses.filter(entry => entry.batchId === batch.id).length
+        available: getWhitelist().filter(entry => entry.batchId === batch.id).length
       }));
       
       // Get current batch

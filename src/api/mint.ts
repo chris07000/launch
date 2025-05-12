@@ -544,8 +544,8 @@ export async function createMintOrder(
 ) {
   console.log('Creating mint order:', { btcAddress, quantity, batchId });
   
-  // Load existing orders
-  const existingOrders = readJsonFile<Order[]>(ORDERS_FILE) || [];
+  // Load existing orders using storage function
+  const existingOrders = getOrders();
   
   // Validate the BTC address
   if (!isValidOrdinalAddress(btcAddress)) {
@@ -593,8 +593,8 @@ export async function createMintOrder(
   orders.push(newOrder);
   existingOrders.push(newOrder);
   
-  // Save orders to file
-  const saved = writeJsonFile(ORDERS_FILE, existingOrders);
+  // Save orders using storage function
+  const saved = saveOrders(existingOrders);
   if (!saved) {
     throw new Error('Failed to save order');
   }
@@ -639,7 +639,7 @@ export function getOrderStatus(orderId: string): Order {
  * API handler voor het updaten van een order status
  */
 export function updateOrderStatus(orderId: string, status: Order['status']): boolean {
-  const orders = readJsonFile<Order[]>(ORDERS_FILE) || [];
+  const orders = getOrders();
   const orderIndex = orders.findIndex(o => o.id === orderId);
   
   if (orderIndex === -1) {
@@ -660,7 +660,7 @@ export function updateOrderStatus(orderId: string, status: Order['status']): boo
     }
   }
   
-  return writeJsonFile(ORDERS_FILE, orders);
+  return saveOrders(orders);
 }
 
 /**
