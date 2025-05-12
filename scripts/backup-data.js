@@ -6,7 +6,7 @@ const path = require('path');
 function configureGit() {
   try {
     execSync('git config user.name "Backup Bot"');
-    execSync('git config user.email "backup@ordinalsmint.com"');
+    execSync('git config user.email "backup@tigerlaunchad.xyz"');
   } catch (error) {
     console.error('Error configuring Git:', error);
     throw error;

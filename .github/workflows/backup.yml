@@ -8,6 +8,14 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        
+      - name: Configure Git
+        run: |
+          git config --global user.name "Backup Bot"
+          git config --global user.email "backup@tigerlaunchad.xyz"
+          
       - name: Trigger Backup
         run: |
-          curl -X POST "${{ secrets.VERCEL_URL }}/api/backup?key=${{ secrets.BACKUP_SECRET }}" 
+          curl -X POST "https://www.tigerlaunchad.xyz/api/backup?key=${{ secrets.BACKUP_SECRET }}" 
