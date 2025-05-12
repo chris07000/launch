@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import { sql } from '@vercel/postgres';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const isVercel = process.env.VERCEL === '1';
@@ -15,32 +15,6 @@ export async function GET() {
     } catch (dbError) {
       console.error('Database connection error:', dbError);
       checks.push({ check: 'database_connection', status: 'unhealthy', error: dbError instanceof Error ? dbError.message : 'Unknown error' });
-    }
-
-    // Only check file access if not on Vercel
-    if (!isVercel) {
-      try {
-        // Check if we can access the data directory
-        const dataDir = path.join(process.cwd(), 'data');
-        await fs.access(dataDir);
-
-        // Check if critical files exist
-        const files = ['batches.json', 'whitelist.json', 'orders.json', 'batch-cooldown.json'];
-        const fileChecks = await Promise.all(
-          files.map(async (file) => {
-            try {
-              await fs.access(path.join(dataDir, file));
-              return { file, exists: true };
-            } catch {
-              return { file, exists: false };
-            }
-          })
-        );
-        checks.push({ check: 'file_system', status: 'healthy', files: fileChecks });
-      } catch (fsError) {
-        console.error('File system check error:', fsError);
-        checks.push({ check: 'file_system', status: 'unhealthy', error: fsError instanceof Error ? fsError.message : 'Unknown error' });
-      }
     }
 
     // Get memory usage

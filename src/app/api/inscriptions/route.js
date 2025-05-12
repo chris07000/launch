@@ -1,27 +1,35 @@
-import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { sql } from '@vercel/postgres';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const INSCRIPTIONS_FILE = path.join(DATA_DIR, 'inscriptions.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Ensure inscriptions file exists
-if (!fs.existsSync(INSCRIPTIONS_FILE)) {
-  fs.writeFileSync(INSCRIPTIONS_FILE, JSON.stringify([], null, 2));
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const inscriptionsData = fs.readFileSync(INSCRIPTIONS_FILE, 'utf8');
-    const inscriptions = JSON.parse(inscriptionsData || '[]');
-    return NextResponse.json(inscriptions);
+    // Get inscriptions from database
+    const { rows } = await sql`
+      SELECT * FROM inscriptions 
+      ORDER BY created_at DESC
+    `;
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      inscriptions: rows
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch inscriptions' }, { status: 500 });
+    console.error('Error fetching inscriptions:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Failed to fetch inscriptions',
+      detail: error.message
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   }
 }
 
