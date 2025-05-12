@@ -4,7 +4,7 @@ import path from 'path';
 
 export async function GET() {
   try {
-    const ordersFile = path.join(process.cwd(), 'data/orders.json');
+    const ordersFile = '/tmp/orders.json';
     
     if (!fs.existsSync(ordersFile)) {
       return NextResponse.json({

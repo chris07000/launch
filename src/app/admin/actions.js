@@ -5,7 +5,7 @@ import path from 'path';
 
 export async function updateOrderStatus(orderId, status) {
   try {
-    const ordersFile = path.join(process.cwd(), 'data/orders.json');
+    const ordersFile = '/tmp/orders.json';
     let orders = {};
     
     if (fs.existsSync(ordersFile)) {
@@ -28,7 +28,7 @@ export async function updateOrderStatus(orderId, status) {
 
 export async function debugOrders() {
   try {
-    const ordersFile = path.join(process.cwd(), 'data/orders.json');
+    const ordersFile = '/tmp/orders.json';
     let orders = {};
     
     if (fs.existsSync(ordersFile)) {

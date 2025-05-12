@@ -76,7 +76,7 @@ export async function GET(request) {
       const currentBatch = batches.find(batch => !batch.isSoldOut) || batches[0];
       
       // Get orders
-      const ordersFile = path.join(process.cwd(), 'data/orders.json');
+      const ordersFile = '/tmp/orders.json';
       let orders = {};
       
       if (fs.existsSync(ordersFile)) {
@@ -280,7 +280,7 @@ export async function POST(request) {
       }
       
       // Get orders
-      const ordersFile = path.join(process.cwd(), 'data/orders.json');
+      const ordersFile = '/tmp/orders.json';
       let orders = {};
       
       if (fs.existsSync(ordersFile)) {
@@ -364,7 +364,7 @@ export async function POST(request) {
       const batchPrice = batches[batchIndex].price || 1.00;
       
       // Get orders
-      const ordersFile = path.join(process.cwd(), 'data/orders.json');
+      const ordersFile = '/tmp/orders.json';
       let orders = {};
       
       if (fs.existsSync(ordersFile)) {
