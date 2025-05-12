@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import axios from 'axios';
 
+// Add dynamic configuration
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export default function TestInscriptionPage() {
   const searchParams = useSearchParams();
   const [inscriptionId, setInscriptionId] = useState<string>('');
