@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createMintOrder, getAllBatches, getBatchInfo } from '@/api/mint';
+import { initializeStorage } from '@/lib/storage';
+
+// Initialize storage on startup
+initializeStorage().catch(console.error);
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,40 +33,24 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Request body ophalen
     const body = await request.json();
-    const { quantity, btcAddress, batchId } = body;
-    
-    console.log('POST /api/mint - Request received:', {
-      quantity,
-      btcAddress,
-      batchId
-    });
-    
-    // Validatie van invoer
+    const { btcAddress, quantity, batchId } = body;
+
+    // Validate required fields
     if (!btcAddress) {
-      throw new Error('Bitcoin address is required');
+      return NextResponse.json({ error: 'BTC address is required' }, { status: 400 });
     }
-    
+
     if (!quantity || quantity < 1) {
-      throw new Error('Valid quantity is required');
+      return NextResponse.json({ error: 'Quantity must be at least 1' }, { status: 400 });
     }
-    
-    // Order aanmaken
-    console.log('Creating mint order with:', { btcAddress, quantity, batchId });
-    const orderData = await createMintOrder(btcAddress, quantity, batchId);
-    console.log('Order created successfully:', orderData);
-    
-    // Response teruggeven
-    return NextResponse.json(orderData, { status: 201 });
+
+    // Create mint order
+    const order = await createMintOrder(btcAddress, quantity, batchId);
+
+    return NextResponse.json(order);
   } catch (error: any) {
-    // Error handling
-    const errorMessage = error.message || 'Something went wrong';
-    console.error('POST /api/mint error:', errorMessage, error);
-    
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 400 }
-    );
+    console.error('Error creating mint order:', error);
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 } 

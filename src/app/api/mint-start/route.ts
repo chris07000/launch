@@ -1,29 +1,37 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { sql } from '@vercel/postgres';
 
-// In production (Vercel) use /tmp, otherwise use data directory
-const BASE_DIR = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'data');
-const MINT_START_FILE = path.join(BASE_DIR, 'mint-start.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bitcointigers2024';
 
-// GET endpoint om de start tijd op te halen
+// Initialize the table
+async function initializeTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS mint_start (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      start_time TIMESTAMP
+    );
+  `;
+}
+
+// GET endpoint to get the start time
 export async function GET() {
   try {
-    if (!fs.existsSync(MINT_START_FILE)) {
-      return NextResponse.json({ startTime: null });
-    }
-
-    const data = fs.readFileSync(MINT_START_FILE, 'utf8');
-    const { startTime } = JSON.parse(data);
-    return NextResponse.json({ startTime });
+    await initializeTable();
+    
+    const { rows } = await sql`
+      SELECT start_time FROM mint_start WHERE id = 1;
+    `;
+    
+    return NextResponse.json({ 
+      startTime: rows.length > 0 ? rows[0].start_time.toISOString() : null 
+    });
   } catch (error) {
     console.error('Error reading mint start time:', error);
     return NextResponse.json({ startTime: null });
   }
 }
 
-// POST endpoint om de start tijd in te stellen
+// POST endpoint to set the start time
 export async function POST(req: Request) {
   try {
     const { startTime, password } = await req.json();
@@ -33,14 +41,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
     }
 
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(BASE_DIR)) {
-      fs.mkdirSync(BASE_DIR, { recursive: true });
-    }
+    await initializeTable();
 
     // Save the start time
-    fs.writeFileSync(MINT_START_FILE, JSON.stringify({ startTime }));
-    console.log('Successfully wrote to', MINT_START_FILE); // Debug log
+    await sql`
+      INSERT INTO mint_start (id, start_time)
+      VALUES (1, ${startTime}::timestamp)
+      ON CONFLICT (id) DO UPDATE
+      SET start_time = EXCLUDED.start_time;
+    `;
 
     return NextResponse.json({ success: true });
   } catch (error) {

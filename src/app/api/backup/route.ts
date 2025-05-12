@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-
-const execAsync = promisify(exec);
+import { sql } from '@vercel/postgres';
 
 export async function POST(request: Request) {
   try {
@@ -15,15 +11,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Execute the backup script
-    const scriptPath = path.join(process.cwd(), 'scripts', 'backup-data.js');
-    const { stdout, stderr } = await execAsync(`node ${scriptPath}`);
+    // Get all data from the database
+    const [orders, batches, whitelist, mintedWallets, batchSoldOutTimes, mintStart] = await Promise.all([
+      sql`SELECT * FROM orders ORDER BY created_at DESC`,
+      sql`SELECT * FROM batches ORDER BY id`,
+      sql`SELECT * FROM whitelist ORDER BY created_at`,
+      sql`SELECT * FROM minted_wallets ORDER BY timestamp`,
+      sql`SELECT * FROM batch_sold_out_times ORDER BY batch_id`,
+      sql`SELECT * FROM mint_start WHERE id = 1`
+    ]);
+
+    // Create backup object
+    const backup = {
+      timestamp: new Date().toISOString(),
+      data: {
+        orders: orders.rows,
+        batches: batches.rows,
+        whitelist: whitelist.rows,
+        mintedWallets: mintedWallets.rows,
+        batchSoldOutTimes: batchSoldOutTimes.rows,
+        mintStart: mintStart.rows[0]
+      }
+    };
 
     return NextResponse.json({ 
       success: true, 
       message: 'Backup completed',
-      output: stdout,
-      error: stderr 
+      backup 
     });
   } catch (error) {
     console.error('Backup failed:', error);

@@ -12,7 +12,7 @@ export default function DebugPage() {
     async function fetchOrders() {
       try {
         console.log('Fetching orders...');
-        const orders = getOrders();
+        const orders = await getOrders();
         console.log('Orders from storage:', orders);
         
         // Try to read directly from /tmp/orders.json

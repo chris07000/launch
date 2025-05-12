@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import { isWalletEligible, isWhitelisted, hasWalletMinted, isBatchAvailable, getBatchInfo, orders, MAX_TIGERS_PER_WALLET } from '@/api/mint';
+import { isWalletEligible, isWhitelisted, hasWalletMinted, isBatchAvailable, getBatchInfo, MAX_TIGERS_PER_WALLET } from '@/api/mint';
+import { getOrders } from '@/lib/storage';
+import { sql } from '@vercel/postgres';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,30 +27,23 @@ export async function GET(request: NextRequest) {
     const batchIdNum = parseInt(batchId, 10);
     
     // Check if the batch is available (not sold out)
-    if (!isBatchAvailable(batchIdNum)) {
-      // Get sold-out time
-      const soldOutFile = path.join(process.cwd(), 'data', 'sold-out-times.json');
-      let soldOutTime = null;
+    const batchAvailable = await isBatchAvailable(batchIdNum);
+    if (!batchAvailable) {
+      // Get sold-out time from database
+      const { rows } = await sql`
+        SELECT sold_out_at 
+        FROM batch_sold_out_times 
+        WHERE batch_id = ${batchIdNum}
+      `;
       
-      try {
-        if (fs.existsSync(soldOutFile)) {
-          const soldOutTimes = JSON.parse(fs.readFileSync(soldOutFile, 'utf8'));
-          soldOutTime = soldOutTimes[batchIdNum];
-          
-          // Als de batch net sold out is en we hebben geen tijd, sla de huidige tijd op
-          if (!soldOutTime) {
-            soldOutTime = Date.now();
-            soldOutTimes[batchIdNum] = soldOutTime;
-            fs.writeFileSync(soldOutFile, JSON.stringify(soldOutTimes));
-          }
-        } else {
-          // Maak nieuw bestand als het niet bestaat
-          const soldOutTimes = { [batchIdNum]: Date.now() };
-          fs.writeFileSync(soldOutFile, JSON.stringify(soldOutTimes));
-          soldOutTime = soldOutTimes[batchIdNum];
-        }
-      } catch (e) {
-        console.error('Error handling sold-out times:', e);
+      const soldOutTime = rows.length > 0 ? rows[0].sold_out_at : Date.now();
+      
+      // If we don't have a record yet, create one
+      if (rows.length === 0) {
+        await sql`
+          INSERT INTO batch_sold_out_times (batch_id, sold_out_at)
+          VALUES (${batchIdNum}, ${new Date().toISOString()}::timestamp)
+        `;
       }
       
       return NextResponse.json({
@@ -62,11 +55,13 @@ export async function GET(request: NextRequest) {
     }
     
     // Check if the address is whitelisted for this batch
-    if (!isWhitelisted(address, batchIdNum)) {
+    const isAddressWhitelisted = await isWhitelisted(address, batchIdNum);
+    if (!isAddressWhitelisted) {
       // Check if address is whitelisted for any other batch
       let whitelistedBatch = null;
       for (let i = 1; i <= 16; i++) {
-        if (isWhitelisted(address, i)) {
+        const whitelisted = await isWhitelisted(address, i);
+        if (whitelisted) {
           whitelistedBatch = i;
           break;
         }
@@ -83,7 +78,8 @@ export async function GET(request: NextRequest) {
     }
     
     // Check if the address has already minted from this batch
-    if (hasWalletMinted(batchIdNum, address)) {
+    const hasMinted = await hasWalletMinted(batchIdNum, address);
+    if (hasMinted) {
       return NextResponse.json({
         eligible: false,
         reason: 'already_minted',
@@ -92,14 +88,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Check total Tigers minted by this wallet
-    let totalTigersMinted = 0;
-    for (const orderId in orders) {
-      const order = orders[orderId];
+    const orders = await getOrders();
+    const totalTigersMinted = orders.reduce((total, order) => {
       if ((order.status === 'paid' || order.status === 'completed') && 
           order.btcAddress === address) {
-        totalTigersMinted += order.quantity;
+        return total + order.quantity;
       }
-    }
+      return total;
+    }, 0);
     
     if (totalTigersMinted >= MAX_TIGERS_PER_WALLET) {
       return NextResponse.json({

@@ -1,191 +1,142 @@
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import { Order, Batch, WhitelistEntry, MintedWallet } from './types';
+import * as db from './db';
 
 // Re-export types
 export type { Order, Batch, WhitelistEntry, MintedWallet };
 
-// Get the OS temporary directory
-const tmpDir = os.tmpdir();
-
-// Constants for file paths - everything in /tmp
-const ORDERS_FILE = path.join(tmpDir, 'orders.json');
-const BATCHES_FILE = path.join(tmpDir, 'batches.json');
-const WHITELIST_FILE = path.join(tmpDir, 'whitelist.json');
-const MINTED_WALLETS_FILE = path.join(tmpDir, 'minted-wallets.json');
-
-// Helper function to ensure directory exists
-export function ensureDirectoryExists(filePath: string) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// Get orders from database
+export async function getOrders(): Promise<Order[]> {
+  console.log('Getting orders from database');
+  try {
+    const orders = await db.getOrders();
+    console.log('Retrieved orders:', orders);
+    return orders;
+  } catch (error) {
+    console.error('Error getting orders:', error);
+    return [];
   }
 }
 
-// Helper function to read JSON file
-export function readJsonFile<T>(filePath: string): T | null {
+// Save order to database
+export async function saveOrder(order: Order): Promise<boolean> {
+  console.log('Saving order to database:', order);
   try {
-    console.log(`Reading file: ${filePath}`);
-    if (!fs.existsSync(filePath)) {
-      console.log(`File does not exist: ${filePath}`);
-      return null;
+    const result = await db.saveOrder(order);
+    console.log('Save result:', result);
+    return result;
+  } catch (error) {
+    console.error('Error saving order:', error);
+    return false;
+  }
+}
+
+// Save multiple orders to database
+export async function saveOrders(orders: Order[]): Promise<boolean> {
+  console.log('Saving multiple orders to database');
+  try {
+    // Save each order individually
+    const results = await Promise.all(orders.map(order => db.saveOrder(order)));
+    return results.every(result => result === true);
+  } catch (error) {
+    console.error('Error saving orders:', error);
+    return false;
+  }
+}
+
+// Get batches from database
+export async function getBatches(): Promise<Batch[]> {
+  try {
+    const batches = await db.getBatches();
+    if (batches.length === 0) {
+      // Return and save default batches if none exist
+      const defaultBatches = [
+        { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 4, price: 282.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 5, price: 292.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 6, price: 303.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 7, price: 314.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 8, price: 325.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 9, price: 335.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 10, price: 346.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 11, price: 357.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 12, price: 367.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
+        { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
+      ];
+      await Promise.all(defaultBatches.map(batch => db.saveBatch(batch)));
+      return defaultBatches;
     }
-    const data = fs.readFileSync(filePath, 'utf8');
-    console.log(`Raw data from ${filePath}:`, data);
-    return JSON.parse(data);
+    return batches;
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error);
-    return null;
+    console.error('Error getting batches:', error);
+    return [];
   }
 }
 
-// Helper function to write JSON file
-export function writeJsonFile<T>(filePath: string, data: T): boolean {
+// Save batches to database
+export async function saveBatches(batches: Batch[]): Promise<boolean> {
   try {
-    console.log(`Writing to file: ${filePath}`);
-    console.log('Data to write:', data);
-    ensureDirectoryExists(filePath);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-    console.log(`Successfully wrote to ${filePath}`);
-    return true;
+    const results = await Promise.all(batches.map(batch => db.saveBatch(batch)));
+    return results.every(result => result === true);
   } catch (error) {
-    console.error(`Error writing file ${filePath}:`, error);
+    console.error('Error saving batches:', error);
     return false;
   }
 }
 
-// Initialize orders file if it doesn't exist
-export function initializeOrdersFile() {
-  console.log('Initializing orders file');
-  if (!fs.existsSync(ORDERS_FILE)) {
-    console.log(`Orders file does not exist: ${ORDERS_FILE}`);
-    ensureDirectoryExists(ORDERS_FILE);
-    writeJsonFile(ORDERS_FILE, []);
-    console.log('Created empty orders file');
-  } else {
-    console.log('Orders file already exists');
-  }
-}
-
-// Get orders from file
-export function getOrders(): Order[] {
-  console.log('Getting orders');
-  initializeOrdersFile();
-  const orders = readJsonFile<Order[]>(ORDERS_FILE) || [];
-  console.log('Retrieved orders:', orders);
-  return orders;
-}
-
-// Save orders to file
-export function saveOrders(orders: Order[]): boolean {
-  console.log('Saving orders:', orders);
-  initializeOrdersFile();
-  const result = writeJsonFile(ORDERS_FILE, orders);
-  console.log('Save result:', result);
-  return result;
-}
-
-// Get batches from file
-export function getBatches(): Batch[] {
-  const batches = readJsonFile<Batch[]>(BATCHES_FILE);
-  if (!batches) {
-    // Return default batches if file doesn't exist
-    const defaultBatches = [
-      { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 4, price: 282.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 5, price: 292.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 6, price: 303.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 7, price: 314.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 8, price: 325.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 9, price: 335.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 10, price: 346.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 11, price: 357.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 12, price: 367.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
-    ];
-    writeJsonFile(BATCHES_FILE, defaultBatches);
-    return defaultBatches;
-  }
-  return batches;
-}
-
-// Save batches to file
-export function saveBatches(batches: Batch[]): boolean {
-  return writeJsonFile(BATCHES_FILE, batches);
-}
-
-// Get whitelist from file
-export function getWhitelist(): WhitelistEntry[] {
-  return readJsonFile<WhitelistEntry[]>(WHITELIST_FILE) || [];
-}
-
-// Save whitelist to file
-export function saveWhitelist(whitelist: WhitelistEntry[]): boolean {
-  return writeJsonFile(WHITELIST_FILE, whitelist);
-}
-
-// Get minted wallets from file
-export function getMintedWallets(): MintedWallet[] {
-  return readJsonFile<MintedWallet[]>(MINTED_WALLETS_FILE) || [];
-}
-
-// Save minted wallets to file
-export function saveMintedWallets(mintedWallets: MintedWallet[]): boolean {
-  return writeJsonFile(MINTED_WALLETS_FILE, mintedWallets);
-}
-
-// Sync orders to batches
-export async function syncOrdersToBatches(adminPassword: string): Promise<boolean> {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
-    return false;
-  }
-
+// Get whitelist from database
+export async function getWhitelist(): Promise<WhitelistEntry[]> {
   try {
-    const orders = getOrders();
-    const batches = getBatches();
-    const mintedWallets = getMintedWallets();
-
-    // Reset mintedWallets count for all batches
-    batches.forEach(batch => {
-      batch.mintedWallets = 0;
-    });
-
-    // Count minted wallets per batch
-    orders.forEach(order => {
-      if (order.status === 'paid' || order.status === 'completed') {
-        const batch = batches.find(b => b.id === order.batchId);
-        if (batch) {
-          batch.mintedWallets++;
-        }
-
-        // Add to mintedWallets if not already present
-        const existingWallet = mintedWallets.find(
-          w => w.address === order.btcAddress && w.batchId === order.batchId
-        );
-        if (!existingWallet) {
-          mintedWallets.push({
-            address: order.btcAddress,
-            batchId: order.batchId,
-            quantity: order.quantity,
-            timestamp: new Date().toISOString()
-          });
-        }
-      }
-    });
-
-    // Save updated batches and minted wallets
-    await saveBatches(batches);
-    await saveMintedWallets(mintedWallets);
-
-    return true;
+    return await db.getWhitelist();
   } catch (error) {
-    console.error('Error syncing orders to batches:', error);
+    console.error('Error getting whitelist:', error);
+    return [];
+  }
+}
+
+// Save whitelist to database
+export async function saveWhitelist(whitelist: WhitelistEntry[]): Promise<boolean> {
+  try {
+    const results = await Promise.all(whitelist.map(entry => db.saveWhitelistEntry(entry)));
+    return results.every(result => result === true);
+  } catch (error) {
+    console.error('Error saving whitelist:', error);
     return false;
+  }
+}
+
+// Get minted wallets from database
+export async function getMintedWallets(): Promise<MintedWallet[]> {
+  try {
+    return await db.getMintedWallets();
+  } catch (error) {
+    console.error('Error getting minted wallets:', error);
+    return [];
+  }
+}
+
+// Save minted wallets to database
+export async function saveMintedWallets(mintedWallets: MintedWallet[]): Promise<boolean> {
+  try {
+    const results = await Promise.all(mintedWallets.map(wallet => db.saveMintedWallet(wallet)));
+    return results.every(result => result === true);
+  } catch (error) {
+    console.error('Error saving minted wallets:', error);
+    return false;
+  }
+}
+
+// Initialize database
+export async function initializeStorage(): Promise<void> {
+  try {
+    await db.initializeDatabase();
+    console.log('Storage initialized successfully');
+  } catch (error) {
+    console.error('Error initializing storage:', error);
+    throw error;
   }
 } 

@@ -2,8 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { 
-  readJsonFile, 
-  writeJsonFile, 
   getOrders, 
   saveOrders, 
   getBatches,
@@ -15,6 +13,7 @@ import {
   type WhitelistEntry
 } from '../lib/storage';
 import { BatchConfig } from '../lib/types';
+import { sql } from '@vercel/postgres';
 
 // Get the OS temporary directory
 const tmpDir = os.tmpdir();
@@ -70,8 +69,13 @@ let usedTransactions: UsedTransaction[] = [];
 let batchSoldOutTimers: Record<number, Date> = {};
 
 // Load whitelist
-whitelistedAddresses = getWhitelist();
-console.log('Whitelist loaded with entries:', whitelistedAddresses);
+async function loadWhitelist() {
+  whitelistedAddresses = await getWhitelist();
+  console.log('Whitelist loaded with entries:', whitelistedAddresses);
+}
+
+// Initialize whitelist
+loadWhitelist();
 
 // Load used transactions from disk
 const loadUsedTransactions = (): UsedTransaction[] => {
@@ -192,8 +196,8 @@ usedTransactions = loadUsedTransactions();
 /**
  * Check of een wallet al heeft gemint in een specifieke batch
  */
-export function hasWalletMinted(batchId: number, btcAddress: string): boolean {
-  // Check in orders array instead of batch config
+export async function hasWalletMinted(batchId: number, btcAddress: string): Promise<boolean> {
+  const orders = await getOrders();
   return orders.some(order => 
     order.batchId === batchId && 
     order.btcAddress === btcAddress && 
@@ -204,7 +208,7 @@ export function hasWalletMinted(batchId: number, btcAddress: string): boolean {
 /**
  * Check of een batch nog ruimte heeft voor nieuwe mints
  */
-export function isBatchAvailable(batchId: number): boolean {
+export async function isBatchAvailable(batchId: number): Promise<boolean> {
   const batch = batchesConfig[batchId];
   if (!batch) return false;
   
@@ -263,9 +267,10 @@ export function markBatchAsSoldOut(batchId: number) {
 /**
  * Find the next available batch after the current one
  */
-function findNextAvailableBatch(currentBatchId: number): number {
+async function findNextAvailableBatch(currentBatchId: number): Promise<number> {
   for (let i = currentBatchId + 1; i <= 16; i++) {
-    if (isBatchAvailable(i)) {
+    const available = await isBatchAvailable(i);
+    if (available) {
       return i;
     }
   }
@@ -275,7 +280,7 @@ function findNextAvailableBatch(currentBatchId: number): number {
 /**
  * Haal de huidige actieve batch op
  */
-export function getCurrentBatch(): number {
+export async function getCurrentBatch(): Promise<number> {
   const currentBatchFile = path.join(process.cwd(), 'data', 'current-batch.json');
   
   try {
@@ -289,15 +294,18 @@ export function getCurrentBatch(): number {
         if (soldOutAt) {
           const timeSinceSoldOut = Date.now() - soldOutAt;
           if (timeSinceSoldOut >= 15 * 60 * 1000) { // 15 minutes passed
-            if (nextBatch && isBatchAvailable(nextBatch)) {
-              // Update current-batch.json with the next batch
-              const newData = {
-                currentBatch: nextBatch,
-                soldOutAt: null,
-                nextBatch: null
-              };
-              fs.writeFileSync(currentBatchFile, JSON.stringify(newData, null, 2));
-              return nextBatch;
+            if (nextBatch) {
+              const isAvailable = await isBatchAvailable(nextBatch);
+              if (isAvailable) {
+                // Update current-batch.json with the next batch
+                const newData = {
+                  currentBatch: nextBatch,
+                  soldOutAt: null,
+                  nextBatch: null
+                };
+                fs.writeFileSync(currentBatchFile, JSON.stringify(newData, null, 2));
+                return nextBatch;
+              }
             }
           }
         }
@@ -311,7 +319,8 @@ export function getCurrentBatch(): number {
   // If we get here, we need to find the first available batch
   let firstAvailableBatch = 1;
   for (let i = 1; i <= 16; i++) {
-    if (isBatchAvailable(i)) {
+    const available = await isBatchAvailable(i);
+    if (available) {
       firstAvailableBatch = i;
       break;
     }
@@ -419,30 +428,30 @@ export function getWhitelistedAddresses(adminPassword: string): WhitelistEntry[]
 /**
  * Check of een adres in de whitelist staat voor een specifieke batch
  */
-export function isWhitelisted(address: string, batchId?: number): boolean {
-  console.log(`Checking whitelist for address: ${address}, batch: ${batchId}, whitelist entries: ${whitelistedAddresses.length}`);
+export async function isWhitelisted(address: string, batchId?: number): Promise<boolean> {
+  const whitelist = await getWhitelist();
+  console.log(`Checking whitelist for address: ${address}, batch: ${batchId}, whitelist entries: ${whitelist.length}`);
   
   // Debug: print the whitelist entries
-  whitelistedAddresses.forEach((entry, index) => {
+  whitelist.forEach((entry, index) => {
     console.log(`Whitelist entry ${index}: address=${entry.address}, batchId=${entry.batchId}`);
   });
   
   // Als de whitelist leeg is, staat niemand op de whitelist
-  // Dit zorgt ervoor dat alleen whitelisted adressen toegang hebben als er een whitelist is
-  if (whitelistedAddresses.length === 0) {
+  if (whitelist.length === 0) {
     console.log('Whitelist is empty, returning false');
-    return false; // Wijziging: standaard false in plaats van true
+    return false;
   }
   
   // Als geen batch is opgegeven, check of het adres in de whitelist staat voor elke batch
   if (batchId === undefined) {
-    const result = whitelistedAddresses.some(entry => entry.address === address);
+    const result = whitelist.some(entry => entry.address === address);
     console.log(`No batch specified, checking any batch. Result: ${result}`);
     return result;
   }
   
   // Check of het adres in de whitelist staat voor de opgegeven batch
-  const result = whitelistedAddresses.some(entry => entry.address === address && entry.batchId === batchId);
+  const result = whitelist.some(entry => entry.address === address && entry.batchId === batchId);
   console.log(`Checking for batch ${batchId}. Result: ${result}`);
   return result;
 }
@@ -477,22 +486,19 @@ export function getAllOrders(adminPassword: string): Order[] | null {
 
 /**
  * Check of een wallet eligible is om te minten
- * Voorwaarden:
- * 1. De wallet staat in de whitelist (als er een whitelist is)
- * 2. De wallet heeft nog niet gemint in de huidige batch
  */
-export function isWalletEligible(batchId: number, btcAddress: string): boolean {
+export async function isWalletEligible(batchId: number, btcAddress: string): Promise<boolean> {
   console.log(`Checking eligibility for address: ${btcAddress}, batch: ${batchId}`);
   
-  // Check of het adres op de whitelist staat (als er een whitelist is)
-  const whitelisted = isWhitelisted(btcAddress, batchId);
+  // Check of het adres op de whitelist staat
+  const whitelisted = await isWhitelisted(btcAddress, batchId);
   if (!whitelisted) {
     console.log(`Address ${btcAddress} is not whitelisted for batch ${batchId}`);
     return false;
   }
   
   // Check of het adres al heeft gemint in deze batch
-  const hasMinted = hasWalletMinted(batchId, btcAddress);
+  const hasMinted = await hasWalletMinted(batchId, btcAddress);
   console.log(`Address ${btcAddress} has ${hasMinted ? 'already' : 'not'} minted in batch ${batchId}`);
   
   if (hasMinted) {
@@ -500,6 +506,7 @@ export function isWalletEligible(batchId: number, btcAddress: string): boolean {
   }
 
   // Check total Tigers minted by this wallet across all batches
+  const orders = await getOrders();
   const totalTigersMinted = orders.reduce((total, order) => {
     if ((order.status === 'paid' || order.status === 'completed') && 
         order.btcAddress === btcAddress) {
@@ -544,20 +551,17 @@ export async function createMintOrder(
 ) {
   console.log('Creating mint order:', { btcAddress, quantity, batchId });
   
-  // Load existing orders using storage function
-  const existingOrders = getOrders();
-  console.log('Existing orders:', existingOrders);
-  
   // Validate the BTC address
   if (!isValidOrdinalAddress(btcAddress)) {
     throw new Error('Invalid BTC address format');
   }
   
   // Get current batch if not specified
-  const currentBatchId = batchId || getCurrentBatch();
+  const currentBatchId = batchId || await getCurrentBatch();
   
   // Check if wallet is eligible to mint
-  if (!isWalletEligible(currentBatchId, btcAddress)) {
+  const eligible = await isWalletEligible(currentBatchId, btcAddress);
+  if (!eligible) {
     throw new Error('Wallet is not eligible to mint from this batch');
   }
   
@@ -592,24 +596,18 @@ export async function createMintOrder(
   
   console.log('New order created:', newOrder);
   
-  // Add order to arrays
-  orders.push(newOrder);
+  // Get existing orders and add the new one
+  const existingOrders = await getOrders();
   existingOrders.push(newOrder);
   
-  console.log('Orders after adding new order:', existingOrders);
-  
-  // Save orders using storage function
-  const saved = saveOrders(existingOrders);
+  // Save all orders
+  const saved = await saveOrders(existingOrders);
   console.log('Save result:', saved);
   
   if (!saved) {
-    console.error('Failed to save orders');
+    console.error('Failed to save order');
     throw new Error('Failed to save order');
   }
-  
-  // Verify orders were saved
-  const savedOrders = getOrders();
-  console.log('Orders after saving:', savedOrders);
   
   // Return order details
   const orderDetails = {
@@ -633,10 +631,10 @@ export async function createMintOrder(
 /**
  * API handler voor het ophalen van een order status
  */
-export function getOrderStatus(orderId: string): Order {
+export async function getOrderStatus(orderId: string): Promise<Order> {
   console.log(`Looking for order with ID: ${orderId}`);
   
-  const orders = readJsonFile<Order[]>(ORDERS_FILE) || [];
+  const orders = await getOrders();
   console.log(`Available orders: ${orders.length}`);
   
   const order = orders.find(o => o.id === orderId);
@@ -651,8 +649,8 @@ export function getOrderStatus(orderId: string): Order {
 /**
  * API handler voor het updaten van een order status
  */
-export function updateOrderStatus(orderId: string, status: Order['status']): boolean {
-  const orders = getOrders();
+export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<boolean> {
+  const orders = await getOrders();
   const orderIndex = orders.findIndex(o => o.id === orderId);
   
   if (orderIndex === -1) {
@@ -673,7 +671,7 @@ export function updateOrderStatus(orderId: string, status: Order['status']): boo
     }
   }
   
-  return saveOrders(orders);
+  return await saveOrders(orders);
 }
 
 /**
@@ -878,21 +876,23 @@ const defaultBatches: Batch[] = [
   { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
 ];
 
-// Check if a transaction has been used
-export function isTransactionUsed(txId: string): boolean {
-  const usedTransactions = readJsonFile<{ [key: string]: UsedTransaction }>(USED_TRANSACTIONS_FILE) || {};
-  return !!usedTransactions[txId];
+// Update isTransactionUsed and markTransactionAsUsed to use database
+export async function isTransactionUsed(txId: string): Promise<boolean> {
+  const { rows } = await sql`
+    SELECT * FROM used_transactions WHERE tx_id = ${txId}
+  `;
+  return rows.length > 0;
 }
 
-// Mark a transaction as used
-export function markTransactionAsUsed(txId: string, orderId: string, amount: number): boolean {
-  const usedTransactions = readJsonFile<{ [key: string]: UsedTransaction }>(USED_TRANSACTIONS_FILE) || {};
-  
-  usedTransactions[txId] = {
-    orderId,
-    amount,
-    timestamp: new Date().toISOString()
-  };
-  
-  return writeJsonFile(USED_TRANSACTIONS_FILE, usedTransactions);
+export async function markTransactionAsUsed(txId: string, orderId: string, amount: number): Promise<boolean> {
+  try {
+    await sql`
+      INSERT INTO used_transactions (tx_id, order_id, amount, timestamp)
+      VALUES (${txId}, ${orderId}, ${amount}, ${new Date().toISOString()}::timestamp)
+    `;
+    return true;
+  } catch (error) {
+    console.error('Error marking transaction as used:', error);
+    return false;
+  }
 } 
