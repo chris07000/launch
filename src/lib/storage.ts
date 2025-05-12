@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-// In production (Vercel) use /tmp, otherwise use data directory
-const BASE_DIR = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'data');
+// Always use the data directory, both locally and in production
+const BASE_DIR = path.join(process.cwd(), 'data');
 
 // Ensure the base directory exists
 if (!fs.existsSync(BASE_DIR)) {
