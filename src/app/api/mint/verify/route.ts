@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isWalletEligible, isWhitelisted, hasWalletMinted, isBatchAvailable, getBatchInfo, MAX_TIGERS_PER_WALLET } from '@/api/mint';
-import { getOrders } from '@/lib/storage';
 import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
   try {
     // Get the batchId and address from the URL
-    const { searchParams } = new URL(request.url);
-    const batchId = searchParams.get('batchId');
-    const address = searchParams.get('address');
+    const batchId = request.nextUrl.searchParams.get('batchId');
+    const address = request.nextUrl.searchParams.get('address');
     
     if (!batchId) {
       return NextResponse.json(
@@ -89,15 +88,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Check total Tigers minted by this wallet
-    const orders = await getOrders();
-    const totalTigersMinted = orders.reduce((total, order) => {
-      if ((order.status === 'paid' || order.status === 'completed') && 
-          order.btcAddress === address) {
-        return total + order.quantity;
-      }
-      return total;
-    }, 0);
+    // Get all orders for this address
+    const { rows: orderRows } = await sql`
+      SELECT * FROM orders 
+      WHERE btc_address = ${address} 
+      AND (status = 'paid' OR status = 'completed')
+    `;
+
+    // Calculate total Tigers minted
+    const totalTigersMinted = orderRows.reduce((total, order) => total + order.quantity, 0);
     
     if (totalTigersMinted >= MAX_TIGERS_PER_WALLET) {
       return NextResponse.json({
