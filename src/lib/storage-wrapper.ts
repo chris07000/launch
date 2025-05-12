@@ -3,21 +3,8 @@
  * Automatically switches between file-based storage (local) and database storage (Vercel)
  */
 
-// Dynamic imports for Node.js modules
-let fs: any;
-let path: any;
-
-// Only import fs/promises and path in non-Vercel environment
-if (typeof process !== 'undefined' && process.env.VERCEL !== '1') {
-  // We're in a Node.js environment and not on Vercel
-  import('fs/promises').then(module => {
-    fs = module.default;
-  });
-  import('path').then(module => {
-    path = module.default;
-  });
-}
-
+// Import safe polyfills instead of direct Node.js modules
+import { fs, path } from './fs-polyfill';
 import { sql } from '@vercel/postgres';
 import { 
   Order, 
@@ -31,12 +18,11 @@ export type { Order, Batch, WhitelistEntry, MintedWallet };
 
 // Detect environment
 const isVercel = process.env.VERCEL === '1';
-// For local environment, create dataDir only if not on Vercel
-const dataDir = !isVercel && typeof path !== 'undefined' ? path.join(process.cwd(), 'data') : '';
+const dataDir = path.join(process.cwd(), 'data');
 
 // Helper to ensure data directory exists (local only)
 async function ensureDataDir() {
-  if (!isVercel && fs) {
+  if (!isVercel) {
     try {
       await fs.access(dataDir);
     } catch {
@@ -66,10 +52,6 @@ export async function getOrders(): Promise<Order[]> {
     }));
   } else {
     try {
-      if (!fs) {
-        console.error('fs module not available');
-        return [];
-      }
       const data = await fs.readFile(path.join(dataDir, 'orders.json'), 'utf-8');
       return JSON.parse(data);
     } catch (error) {

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as storage from '@/lib/storage-wrapper';
 
-export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
