@@ -1,0 +1,13 @@
+name: Backup Data
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Run every 5 minutes
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Backup
+        run: |
+          curl -X POST "${{ secrets.VERCEL_URL }}/api/backup?key=${{ secrets.BACKUP_SECRET }}" 
