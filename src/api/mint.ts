@@ -1,19 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { 
-  getOrders, 
-  saveOrders, 
-  getBatches,
-  saveBatches,
-  getWhitelist,
-  saveWhitelist,
-  type Order, 
-  type Batch,
-  type WhitelistEntry
-} from '../lib/storage';
+import * as storage from '../lib/storage-wrapper';
 import { BatchConfig } from '../lib/types';
 import { sql } from '@vercel/postgres';
+
+// Check if running in Vercel environment
+const isVercel = process.env.VERCEL === '1';
 
 // Get the OS temporary directory
 const tmpDir = os.tmpdir();
@@ -42,8 +35,6 @@ const INSCRIPTIONS_FILE_PATH = path.join(process.cwd(), 'data', 'inscriptions.js
 // File path for whitelist
 const WHITELIST_FILE_PATH = path.join(process.cwd(), 'data', 'whitelist.json');
 
-// Whitelist interface is now imported from storage.ts, so we can remove it here
-
 // Het BTC adres waar alle betalingen naartoe gaan (project wallet)
 const PROJECT_BTC_ADDRESS = process.env.PROJECT_BTC_WALLET || 'bc1p9rf34vgvaz2rswpqh7d0zdvghzqreglp8qzk9eun3fscyj6pm5kqk96605';
 
@@ -59,66 +50,17 @@ export const MAX_TIGERS_PER_WALLET = process.env.MAX_TIGERS_PER_WALLET ? parseIn
 // BTC naar USD conversie (in een echte implementatie zou je een API gebruiken)
 const BTC_TO_USD_RATE = parseInt(process.env.BTC_TO_USD_RATE || '40000', 10); // 1 BTC = $40,000 USD voor testing
 
-// In-memory storage voor whitelisted adressen (in productie zou je dit in een database opslaan)
-let whitelistedAddresses: WhitelistEntry[] = [];
-
-// In-memory storage voor gebruikte transacties
-let usedTransactions: UsedTransaction[] = [];
-
-// Houdt bij wanneer een batch sold out is gegaan
-let batchSoldOutTimers: Record<number, Date> = {};
+// In-memory storage voor whitelisted adressen
+let whitelistedAddresses: storage.WhitelistEntry[] = [];
 
 // Load whitelist
 async function loadWhitelist() {
-  whitelistedAddresses = await getWhitelist();
+  whitelistedAddresses = await storage.getWhitelist();
   console.log('Whitelist loaded with entries:', whitelistedAddresses);
 }
 
 // Initialize whitelist
 loadWhitelist();
-
-// Load used transactions from disk
-const loadUsedTransactions = (): UsedTransaction[] => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    // Check if file exists
-    if (!fs.existsSync(USED_TRANSACTIONS_FILE)) {
-      return [];
-    }
-    
-    const data = fs.readFileSync(USED_TRANSACTIONS_FILE, 'utf8');
-    const parsed = JSON.parse(data);
-    
-    // Convert date strings back to Date objects
-    return parsed.map((tx: any) => ({
-      ...tx,
-      timestamp: new Date(tx.timestamp)
-    }));
-  } catch (error) {
-    console.error('Error loading used transactions:', error);
-    return [];
-  }
-};
-
-// Save used transactions to disk
-const saveUsedTransactions = (transactions: UsedTransaction[]): void => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(USED_TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2));
-  } catch (error) {
-    console.error('Error saving used transactions:', error);
-  }
-};
 
 // Configuratie van batches
 const batchesConfig: Record<number, BatchConfig> = {
@@ -143,61 +85,11 @@ const batchesConfig: Record<number, BatchConfig> = {
 // In-memory storage for inscriptions
 let inscriptions: Inscription[] = [];
 
-// Load inscriptions from disk
-const loadInscriptions = (): Inscription[] => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    // Check if inscriptions file exists
-    if (!fs.existsSync(INSCRIPTIONS_FILE_PATH)) {
-      return [];
-    }
-    
-    const inscriptionsData = fs.readFileSync(INSCRIPTIONS_FILE_PATH, 'utf8');
-    const parsedInscriptions = JSON.parse(inscriptionsData);
-    
-    console.log(`Loaded ${parsedInscriptions.length} inscriptions from disk`);
-    return parsedInscriptions;
-  } catch (error) {
-    console.error('Error loading inscriptions from disk:', error);
-    return [];
-  }
-};
-
-// Save inscriptions to disk
-const saveInscriptions = (inscriptionsToSave: Inscription[]): void => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(INSCRIPTIONS_FILE_PATH, JSON.stringify(inscriptionsToSave, null, 2));
-    console.log(`Saved ${inscriptionsToSave.length} inscriptions to disk`);
-  } catch (error) {
-    console.error('Error saving inscriptions to disk:', error);
-  }
-};
-
-// In-memory storage voor orders
-export const orders: Order[] = [];
-
-// Initialize inscriptions
-inscriptions = loadInscriptions();
-
-// Initialize used transactions
-usedTransactions = loadUsedTransactions();
-
 /**
  * Check of een wallet al heeft gemint in een specifieke batch
  */
 export async function hasWalletMinted(batchId: number, btcAddress: string): Promise<boolean> {
-  const orders = await getOrders();
+  const orders = await storage.getOrders();
   return orders.some(order => 
     order.batchId === batchId && 
     order.btcAddress === btcAddress && 
@@ -209,7 +101,8 @@ export async function hasWalletMinted(batchId: number, btcAddress: string): Prom
  * Check of een batch nog ruimte heeft voor nieuwe mints
  */
 export async function isBatchAvailable(batchId: number): Promise<boolean> {
-  const batch = batchesConfig[batchId];
+  const batches = await storage.getBatches();
+  const batch = batches.find(b => b.id === batchId);
   if (!batch) return false;
   
   return batch.mintedWallets < batch.maxWallets;
@@ -218,50 +111,29 @@ export async function isBatchAvailable(batchId: number): Promise<boolean> {
 /**
  * Markeer een batch als sold out en start de timer
  */
-export function markBatchAsSoldOut(batchId: number) {
-  const soldOutTime = Date.now();
-  
-  // Save the sold-out time to file
-  const soldOutFile = path.join(process.cwd(), 'data', 'sold-out-times.json');
-  let soldOutTimes: Record<number, number> = {};
-  
+export async function markBatchAsSoldOut(batchId: number) {
   try {
-    if (fs.existsSync(soldOutFile)) {
-      const fileContent = fs.readFileSync(soldOutFile, 'utf8');
-      soldOutTimes = JSON.parse(fileContent) as { [key: string]: number };
+    // Get current batch info
+    const currentBatchInfo = await storage.getCurrentBatch();
+    
+    // Mark as sold out with timestamp
+    await storage.saveCurrentBatch({
+      currentBatch: batchId,
+      soldOutAt: Date.now()
+    });
+    
+    // Update batch in batches list
+    const batches = await storage.getBatches();
+    const batchIndex = batches.findIndex(b => b.id === batchId);
+    if (batchIndex !== -1) {
+      batches[batchIndex].isSoldOut = true;
+      await storage.saveBatches(batches);
     }
-  } catch (e) {
-    console.error('Error reading sold-out times:', e);
+    
+    console.log(`Batch ${batchId} marked as sold out at ${new Date().toISOString()}`);
+  } catch (error) {
+    console.error('Error marking batch as sold out:', error);
   }
-  
-  soldOutTimes[batchId] = soldOutTime;
-  fs.writeFileSync(soldOutFile, JSON.stringify(soldOutTimes));
-  
-  console.log(`Batch ${batchId} marked as sold out at ${new Date(soldOutTime).toISOString()}`);
-  
-  // Update batches.json to mark the batch as sold out
-  const batchesFile = path.join(process.cwd(), 'data', 'batches.json');
-  if (fs.existsSync(batchesFile)) {
-    try {
-      const batchesData = fs.readFileSync(batchesFile, 'utf8');
-      const batches = JSON.parse(batchesData);
-      const batchIndex = batches.findIndex((b: any) => b.id === batchId);
-      if (batchIndex !== -1) {
-        batches[batchIndex].isSoldOut = true;
-        fs.writeFileSync(batchesFile, JSON.stringify(batches, null, 2));
-      }
-    } catch (e) {
-      console.error('Error updating batches.json:', e);
-    }
-  }
-
-  // Update current-batch.json
-  const currentBatchFile = path.join(process.cwd(), 'data', 'current-batch.json');
-  fs.writeFileSync(currentBatchFile, JSON.stringify({
-    currentBatch: batchId,
-    soldOutAt: soldOutTime,
-    nextBatch: findNextAvailableBatch(batchId)
-  }, null, 2));
 }
 
 /**
@@ -281,60 +153,34 @@ async function findNextAvailableBatch(currentBatchId: number): Promise<number> {
  * Haal de huidige actieve batch op
  */
 export async function getCurrentBatch(): Promise<number> {
-  const currentBatchFile = path.join(process.cwd(), 'data', 'current-batch.json');
-  
   try {
-    if (fs.existsSync(currentBatchFile)) {
-      const data = JSON.parse(fs.readFileSync(currentBatchFile, 'utf8'));
-      const { currentBatch, soldOutAt, nextBatch } = data;
+    const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
+    
+    // If we have a sold out time, check if cooldown period has elapsed
+    if (soldOutAt) {
+      const now = Date.now();
+      const timeSinceSoldOut = now - soldOutAt;
       
-      // If we have a valid current batch, use it
-      if (currentBatch && !isNaN(currentBatch)) {
-        // If we have a sold out time, check if we should move to next batch
-        if (soldOutAt) {
-          const timeSinceSoldOut = Date.now() - soldOutAt;
-          if (timeSinceSoldOut >= 15 * 60 * 1000) { // 15 minutes passed
-            if (nextBatch) {
-              const isAvailable = await isBatchAvailable(nextBatch);
-              if (isAvailable) {
-                // Update current-batch.json with the next batch
-                const newData = {
-                  currentBatch: nextBatch,
-                  soldOutAt: null,
-                  nextBatch: null
-                };
-                fs.writeFileSync(currentBatchFile, JSON.stringify(newData, null, 2));
-                return nextBatch;
-              }
-            }
-          }
-        }
-        return currentBatch;
+      // Default cooldown is 15 minutes (900000 ms)
+      if (timeSinceSoldOut >= 15 * 60 * 1000) {
+        // Find next available batch
+        const nextBatch = await findNextAvailableBatch(currentBatch);
+        
+        // Update current batch
+        await storage.saveCurrentBatch({
+          currentBatch: nextBatch,
+          soldOutAt: null
+        });
+        
+        return nextBatch;
       }
     }
-  } catch (e) {
-    console.error('Error reading current-batch.json:', e);
+    
+    return currentBatch;
+  } catch (error) {
+    console.error('Error getting current batch:', error);
+    return 1; // Default to batch 1
   }
-
-  // If we get here, we need to find the first available batch
-  let firstAvailableBatch = 1;
-  for (let i = 1; i <= 16; i++) {
-    const available = await isBatchAvailable(i);
-    if (available) {
-      firstAvailableBatch = i;
-      break;
-    }
-  }
-
-  // Create or update current-batch.json
-  const newData = {
-    currentBatch: firstAvailableBatch,
-    soldOutAt: null,
-    nextBatch: null
-  };
-  fs.writeFileSync(currentBatchFile, JSON.stringify(newData, null, 2));
-  
-  return firstAvailableBatch;
 }
 
 /**
@@ -355,7 +201,7 @@ export function validateAdminPassword(password: string): boolean {
 /**
  * Voeg een adres toe aan de whitelist
  */
-export function addToWhitelist(address: string, adminPassword: string, batchId: number = 1): boolean {
+export async function addToWhitelist(address: string, adminPassword: string, batchId: number = 1): Promise<boolean> {
   if (!validateAdminPassword(adminPassword)) {
     return false;
   }
@@ -364,72 +210,88 @@ export function addToWhitelist(address: string, adminPassword: string, batchId: 
     return false;
   }
   
-  // Check if the batch exists
-  if (!batchesConfig[batchId]) {
+  try {
+    // Get current whitelist
+    const whitelist = await storage.getWhitelist();
+    
+    // Check if address already exists
+    const existingIndex = whitelist.findIndex(entry => entry.address === address);
+    
+    if (existingIndex !== -1) {
+      // Update existing entry
+      whitelist[existingIndex].batchId = batchId;
+      whitelist[existingIndex].updatedAt = new Date().toISOString();
+    } else {
+      // Add new entry
+      whitelist.push({
+        address,
+        batchId,
+        createdAt: new Date().toISOString()
+      });
+    }
+    
+    // Save whitelist
+    await storage.saveWhitelist(whitelist);
+    
+    // Update in-memory cache
+    whitelistedAddresses = whitelist;
+    
+    return true;
+  } catch (error) {
+    console.error('Error adding to whitelist:', error);
     return false;
   }
-  
-  // Check if the address is already in the whitelist
-  const existingIndex = whitelistedAddresses.findIndex(entry => entry.address === address);
-  if (existingIndex !== -1) {
-    // Update the batch if the address already exists
-    whitelistedAddresses[existingIndex] = {
-      ...whitelistedAddresses[existingIndex],
-      batchId,
-      createdAt: whitelistedAddresses[existingIndex].createdAt || new Date().toISOString()
-    };
-  } else {
-    // Add new entry if address doesn't exist
-    whitelistedAddresses.push({ 
-      address, 
-      batchId,
-      createdAt: new Date().toISOString()
-    });
-  }
-  
-  // Save whitelist to file
-  saveWhitelist(whitelistedAddresses);
-  
-  return true;
 }
 
 /**
  * Verwijder een adres van de whitelist
  */
-export function removeFromWhitelist(address: string, adminPassword: string): boolean {
+export async function removeFromWhitelist(address: string, adminPassword: string): Promise<boolean> {
   if (!validateAdminPassword(adminPassword)) {
     return false;
   }
   
-  const index = whitelistedAddresses.findIndex(entry => entry.address === address);
-  if (index !== -1) {
-    whitelistedAddresses.splice(index, 1);
+  try {
+    // Get current whitelist
+    const whitelist = await storage.getWhitelist();
     
-    // Save whitelist to file
-    saveWhitelist(whitelistedAddresses);
+    // Filter out the address
+    const newWhitelist = whitelist.filter(entry => entry.address !== address);
+    
+    // Save whitelist
+    await storage.saveWhitelist(newWhitelist);
+    
+    // Update in-memory cache
+    whitelistedAddresses = newWhitelist;
     
     return true;
+  } catch (error) {
+    console.error('Error removing from whitelist:', error);
+    return false;
   }
-  
-  return false;
 }
 
 /**
  * Haal alle whitelisted adressen op
  */
-export function getWhitelistedAddresses(adminPassword: string): WhitelistEntry[] | null {
+export async function getWhitelistedAddresses(adminPassword: string): Promise<storage.WhitelistEntry[] | null> {
   if (!validateAdminPassword(adminPassword)) {
     return null;
   }
   
-  return [...whitelistedAddresses];
+  try {
+    return await storage.getWhitelist();
+  } catch (error) {
+    console.error('Error getting whitelist:', error);
+    return null;
+  }
 }
 
 /**
  * Check of een adres in de whitelist staat voor een specifieke batch
  */
 export async function isWhitelisted(address: string, batchId?: number): Promise<boolean> {
-  const whitelist = await getWhitelist();
+  const whitelist = await storage.getWhitelist();
   console.log(`Checking whitelist for address: ${address}, batch: ${batchId}, whitelist entries: ${whitelist.length}`);
   
   // Debug: print the whitelist entries
@@ -459,29 +321,40 @@ export async function isWhitelisted(address: string, batchId?: number): Promise<
 /**
  * Admin functie: Haal alle minted wallets op voor alle batches
  */
-export function getMintedWallets(adminPassword: string): Record<number, number> | null {
+export async function getMintedWallets(adminPassword: string): Promise<Record<number, number> | null> {
   if (!validateAdminPassword(adminPassword)) {
     return null;
   }
   
-  const result: Record<number, number> = {};
-  
-  for (const batchId in batchesConfig) {
-    result[Number(batchId)] = batchesConfig[Number(batchId)].mintedWallets;
+  try {
+    const batches = await storage.getBatches();
+    
+    const result: Record<number, number> = {};
+    for (const batch of batches) {
+      result[batch.id] = batch.mintedWallets;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error getting minted wallets:', error);
+    return null;
   }
-  
-  return result;
 }
 
 /**
  * Admin functie: Haal alle orders op
  */
-export function getAllOrders(adminPassword: string): Order[] | null {
+export async function getAllOrders(adminPassword: string): Promise<storage.Order[] | null> {
   if (!validateAdminPassword(adminPassword)) {
     return null;
   }
   
-  return [...orders];
+  try {
+    return await storage.getOrders();
+  } catch (error) {
+    console.error('Error getting all orders:', error);
+    return null;
+  }
 }
 
 /**
@@ -506,7 +379,7 @@ export async function isWalletEligible(batchId: number, btcAddress: string): Pro
   }
 
   // Check total Tigers minted by this wallet across all batches
-  const orders = await getOrders();
+  const orders = await storage.getOrders();
   const totalTigersMinted = orders.reduce((total, order) => {
     if ((order.status === 'paid' || order.status === 'completed') && 
         order.btcAddress === btcAddress) {
@@ -565,9 +438,16 @@ export async function createMintOrder(
     throw new Error('Wallet is not eligible to mint from this batch');
   }
   
+  // Get batch info to determine price
+  const batches = await storage.getBatches();
+  const batchInfo = batches.find(b => b.id === currentBatchId);
+  
+  if (!batchInfo) {
+    throw new Error(`Batch ${currentBatchId} not found`);
+  }
+  
   // Calculate total price in USD
-  const batchConfig = batchesConfig[currentBatchId];
-  const pricePerUnit = batchConfig.price;
+  const pricePerUnit = batchInfo.price;
   const totalPriceUSD = pricePerUnit * quantity;
   
   // Convert USD to BTC
@@ -578,7 +458,7 @@ export async function createMintOrder(
   
   // Create new order with consistent ID format
   const orderId = `ord_${Math.random().toString(36).substring(2, 10)}`;
-  const newOrder: Order = {
+  const newOrder: storage.Order = {
     id: orderId,
     btcAddress,
     quantity,
@@ -597,11 +477,11 @@ export async function createMintOrder(
   console.log('New order created:', newOrder);
   
   // Get existing orders and add the new one
-  const existingOrders = await getOrders();
+  const existingOrders = await storage.getOrders();
   existingOrders.push(newOrder);
   
   // Save all orders
-  const saved = await saveOrders(existingOrders);
+  const saved = await storage.saveOrders(existingOrders);
   console.log('Save result:', saved);
   
   if (!saved) {
@@ -631,10 +511,10 @@ export async function createMintOrder(
 /**
  * API handler voor het ophalen van een order status
  */
-export async function getOrderStatus(orderId: string): Promise<Order> {
+export async function getOrderStatus(orderId: string): Promise<storage.Order> {
   console.log(`Looking for order with ID: ${orderId}`);
   
-  const orders = await getOrders();
+  const orders = await storage.getOrders();
   console.log(`Available orders: ${orders.length}`);
   
   const order = orders.find(o => o.id === orderId);
@@ -642,57 +522,77 @@ export async function getOrderStatus(orderId: string): Promise<Order> {
     throw new Error(`Order ${orderId} not found`);
   }
   
-  console.log(`Found order ${orderId}:`, order);
+  console.log(`Order ${orderId} status retrieved:`, order);
   return order;
 }
 
 /**
  * API handler voor het updaten van een order status
  */
-export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<boolean> {
-  const orders = await getOrders();
-  const orderIndex = orders.findIndex(o => o.id === orderId);
-  
-  if (orderIndex === -1) {
-    console.error(`Order ${orderId} not found`);
+export async function updateOrderStatus(orderId: string, status: storage.Order['status']): Promise<boolean> {
+  try {
+    const orders = await storage.getOrders();
+    const orderIndex = orders.findIndex(o => o.id === orderId);
+    
+    if (orderIndex === -1) {
+      console.error(`Order ${orderId} not found`);
+      return false;
+    }
+    
+    const order = orders[orderIndex];
+    order.status = status;
+    order.updatedAt = new Date().toISOString();
+    
+    // Update batch status if order is paid
+    if (status === 'paid') {
+      const batches = await storage.getBatches();
+      const batchIndex = batches.findIndex(b => b.id === order.batchId);
+      
+      if (batchIndex !== -1) {
+        batches[batchIndex].mintedWallets += 1;
+        
+        // Check if batch is now sold out
+        if (batches[batchIndex].mintedWallets >= batches[batchIndex].maxWallets) {
+          batches[batchIndex].isSoldOut = true;
+          await markBatchAsSoldOut(order.batchId);
+        }
+        
+        await storage.saveBatches(batches);
+      }
+    }
+    
+    return await storage.saveOrders(orders);
+  } catch (error) {
+    console.error('Error updating order status:', error);
     return false;
   }
-  
-  const order = orders[orderIndex];
-  order.status = status;
-  order.updatedAt = new Date().toISOString();
-  
-  // Update batch status if order is paid
-  if (status === 'paid') {
-    const batch = batchesConfig[order.batchId];
-    if (batch) {
-      batch.mintedWallets += 1;
-      updateBatchStatus(order.batchId);
-    }
-  }
-  
-  return await saveOrders(orders);
 }
 
 /**
  * API handler voor het ophalen van batch informatie
  */
 export async function getBatchInfo(batchId: number) {
-  const batch = batchesConfig[batchId];
-  
-  if (!batch) {
-    throw new Error(`Batch ${batchId} does not exist`);
+  try {
+    const batches = await storage.getBatches();
+    const batch = batches.find(b => b.id === batchId);
+    
+    if (!batch) {
+      throw new Error(`Batch ${batchId} not found`);
+    }
+    
+    return {
+      id: batch.id,
+      price: batch.price,
+      maxWallets: batch.maxWallets,
+      mintedWallets: batch.mintedWallets,
+      available: batch.maxWallets - batch.mintedWallets,
+      isSoldOut: batch.isSoldOut,
+      ordinals: batch.ordinals
+    };
+  } catch (error) {
+    console.error('Error getting batch info:', error);
+    throw error;
   }
-  
-  return {
-    id: batch.id,
-    price: batch.price,
-    maxWallets: batch.maxWallets,
-    mintedWallets: batch.mintedWallets,
-    available: batch.maxWallets - batch.mintedWallets,
-    isSoldOut: batch.isSoldOut,
-    ordinals: batch.ordinals
-  };
 }
 
 /**
@@ -700,199 +600,89 @@ export async function getBatchInfo(batchId: number) {
  */
 export async function getAllBatches() {
   try {
-    let batches: Batch[] = [];
+    // Get batches
+    const batches = await storage.getBatches();
     
-    // First check if we have a current batch file
-    const currentBatchFile = path.join(process.cwd(), 'data', 'current-batch.json');
-    let currentBatchId = 1;
+    // Get current batch 
+    const currentBatchId = await getCurrentBatch();
     
-    if (fs.existsSync(currentBatchFile)) {
-      try {
-        const currentBatchData = JSON.parse(fs.readFileSync(currentBatchFile, 'utf8'));
-        if (currentBatchData.currentBatch) {
-          currentBatchId = currentBatchData.currentBatch;
-        }
-      } catch (e) {
-        console.error('Error reading current batch file:', e);
-      }
-    }
-    
-    // Get batches from configuration file
-    const batchesFile = path.join(process.cwd(), 'data', 'batches.json');
-    if (fs.existsSync(batchesFile)) {
-      try {
-        const batchesData = fs.readFileSync(batchesFile, 'utf8');
-        batches = JSON.parse(batchesData || '[]');
-      } catch (e) {
-        console.error('Error reading batches file:', e);
-        batches = defaultBatches;
-      }
-    } else {
-      batches = defaultBatches;
-    }
-    
-    // Ensure we have the correct current batch
-    const finalCurrentBatch = getCurrentBatch();
-    
-    // Return batches and current batch
     return {
       batches,
-      currentBatch: finalCurrentBatch
+      currentBatch: currentBatchId
     };
   } catch (error) {
     console.error('Error getting all batches:', error);
     return {
-      batches: defaultBatches,
+      batches: [],
       currentBatch: 1
     };
   }
 }
 
-/**
- * Admin function: Get all inscriptions
- */
-export function getAllInscriptions(adminPassword: string): Inscription[] | null {
-  if (!validateAdminPassword(adminPassword)) {
-    return null;
-  }
-  
-  return [...inscriptions];
-}
-
-/**
- * Admin function: Add a new inscription
- */
-export function addInscription(
-  inscriptionId: string, 
-  imageUrl: string, 
-  batchId: number, 
-  adminPassword: string
-): boolean {
-  if (!validateAdminPassword(adminPassword)) {
-    return false;
-  }
-  
-  // Check if inscription already exists
-  const existingInscription = inscriptions.find(insc => insc.inscriptionId === inscriptionId);
-  if (existingInscription) {
-    return false;
-  }
-  
-  // Add new inscription
-  inscriptions.push({
-    inscriptionId,
-    imageUrl,
-    batchId
-  });
-  
-  // Save to disk
-  saveInscriptions(inscriptions);
-  
-  return true;
-}
-
-/**
- * Admin function: Assign inscription to order
- */
-export function assignInscriptionToOrder(
-  inscriptionId: string, 
-  orderId: string, 
-  adminPassword: string
-): boolean {
-  if (!validateAdminPassword(adminPassword)) {
-    return false;
-  }
-  
-  // Check if inscription exists
-  const inscriptionIndex = inscriptions.findIndex(insc => insc.inscriptionId === inscriptionId);
-  if (inscriptionIndex === -1) {
-    return false;
-  }
-  
-  // Find order in the orders array
-  const orderIndex = orders.findIndex(o => o.id === orderId);
-  if (orderIndex === -1) {
-    return false;
-  }
-  
-  // Update inscription
-  inscriptions[inscriptionIndex].assignedToOrder = orderId;
-  
-  // Update order with the inscription
-  orders[orderIndex].inscriptionId = inscriptionId;
-  
-  // Save both to disk
-  saveInscriptions(inscriptions);
-  saveOrders(orders);
-  
-  return true;
-}
-
-/**
- * Get inscription for an order
- */
-export function getInscriptionForOrder(orderId: string): Inscription | null {
-  // Get the order from the orders array
-  const order = orders.find(o => o.id === orderId);
-  if (!order || !order.inscriptionId) {
-    return null;
-  }
-  
-  // Find the inscription
-  const inscription = inscriptions.find(insc => insc.inscriptionId === order.inscriptionId);
-  return inscription || null;
-}
-
-/**
- * Update de batch status na een succesvolle mint
- */
-export function updateBatchStatus(batchId: number) {
-  const batch = batchesConfig[batchId];
-  if (!batch) return;
-
-  // Check of de batch nu sold out is
-  if (batch.mintedWallets >= batch.maxWallets) {
-    markBatchAsSoldOut(batchId);
-  }
-}
-
-// Default batches als fallback
-const defaultBatches: Batch[] = [
-  { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 4, price: 282.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 5, price: 292.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 6, price: 303.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 7, price: 314.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 8, price: 325.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 9, price: 335.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 10, price: 346.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 11, price: 357.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 12, price: 367.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-  { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
-];
-
 // Update isTransactionUsed and markTransactionAsUsed to use database
 export async function isTransactionUsed(txId: string): Promise<boolean> {
-  const { rows } = await sql`
-    SELECT * FROM used_transactions WHERE tx_id = ${txId}
-  `;
-  return rows.length > 0;
+  if (isVercel) {
+    try {
+      const { rows } = await sql`
+        SELECT * FROM used_transactions WHERE tx_id = ${txId}
+      `;
+      return rows.length > 0;
+    } catch (error) {
+      console.error('Error checking if transaction is used:', error);
+      return false;
+    }
+  } else {
+    try {
+      if (!fs.existsSync(USED_TRANSACTIONS_FILE)) {
+        return false;
+      }
+      
+      const data = fs.readFileSync(USED_TRANSACTIONS_FILE, 'utf8');
+      const transactions = JSON.parse(data);
+      return !!transactions[txId];
+    } catch (error) {
+      console.error('Error checking if transaction is used:', error);
+      return false;
+    }
+  }
 }
 
 export async function markTransactionAsUsed(txId: string, orderId: string, amount: number): Promise<boolean> {
-  try {
-    await sql`
-      INSERT INTO used_transactions (tx_id, order_id, amount, timestamp)
-      VALUES (${txId}, ${orderId}, ${amount}, ${new Date().toISOString()}::timestamp)
-    `;
-    return true;
-  } catch (error) {
-    console.error('Error marking transaction as used:', error);
-    return false;
+  if (isVercel) {
+    try {
+      await sql`
+        INSERT INTO used_transactions (tx_id, order_id, amount, timestamp)
+        VALUES (${txId}, ${orderId}, ${amount}, ${new Date().toISOString()}::timestamp)
+      `;
+      return true;
+    } catch (error) {
+      console.error('Error marking transaction as used:', error);
+      return false;
+    }
+  } else {
+    try {
+      // Load existing transactions
+      let transactions: Record<string, UsedTransaction> = {};
+      
+      if (fs.existsSync(USED_TRANSACTIONS_FILE)) {
+        const data = fs.readFileSync(USED_TRANSACTIONS_FILE, 'utf8');
+        transactions = JSON.parse(data);
+      }
+      
+      // Add new transaction
+      transactions[txId] = {
+        orderId,
+        amount,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Save transactions
+      fs.writeFileSync(USED_TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2));
+      
+      return true;
+    } catch (error) {
+      console.error('Error marking transaction as used:', error);
+      return false;
+    }
   }
 } 
