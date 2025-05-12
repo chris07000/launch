@@ -5,6 +5,8 @@ import { initializeStorage } from '@/lib/storage';
 // Initialize storage on startup
 initializeStorage().catch(console.error);
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Haal de batchId uit de URL als die er is

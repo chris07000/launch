@@ -3,6 +3,8 @@ import { isWalletEligible, isWhitelisted, hasWalletMinted, isBatchAvailable, get
 import { getOrders } from '@/lib/storage';
 import { sql } from '@vercel/postgres';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // Get the batchId and address from the URL

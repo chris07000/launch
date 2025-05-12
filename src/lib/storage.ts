@@ -144,13 +144,16 @@ export async function saveMintedWallet(wallet: MintedWallet): Promise<boolean> {
 }
 
 // Initialize database
-export async function initializeStorage(): Promise<void> {
+export async function initializeStorage(): Promise<boolean> {
   try {
-    await sql`TRUNCATE orders`;
-    await sql`TRUNCATE batches`;
-    await sql`TRUNCATE whitelist`;
-    await sql`TRUNCATE minted_wallets`;
-    console.log('Storage initialized successfully');
+    // Drop all tables if they exist
+    await sql`DROP TABLE IF EXISTS orders CASCADE;`;
+    await sql`DROP TABLE IF EXISTS batches CASCADE;`;
+    await sql`DROP TABLE IF EXISTS whitelist CASCADE;`;
+    await sql`DROP TABLE IF EXISTS minted_wallets CASCADE;`;
+    
+    console.log('All tables dropped successfully');
+    return true;
   } catch (error) {
     console.error('Error initializing storage:', error);
     throw error;
