@@ -1,39 +1,24 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { Pool } from 'pg';
+import { sql } from '@vercel/postgres';
 
 export async function GET() {
   try {
-    // Connect to the database using Pool for better performance
-    const pool = new Pool({
-      connectionString: process.env.POSTGRES_URL,
-      ssl: {
-        rejectUnauthorized: false
+    // Test database connection
+    const result = await sql`SELECT NOW() as time`;
+    
+    // Create response
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'Database connection successful',
+      time: result.rows[0].time,
+      timestamp: new Date().toISOString()
+    }), {
+      headers: {
+        'content-type': 'application/json'
       }
     });
-
-    // Test connection
-    const client = await pool.connect();
-    try {
-      // Query database
-      const result = await client.query('SELECT NOW() as time');
-      
-      // Create response
-      return new Response(JSON.stringify({
-        status: 'success',
-        message: 'Database connection successful',
-        time: result.rows[0].time,
-        timestamp: new Date().toISOString()
-      }), {
-        headers: {
-          'content-type': 'application/json'
-        }
-      });
-    } finally {
-      // Release client back to pool
-      client.release();
-    }
   } catch (error: any) {
     console.error('Database error:', error);
     
