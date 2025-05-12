@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { readJsonFile, writeJsonFile, getOrders, saveOrders } from '../lib/storage';
-import { Order, Batch } from '../lib/types';
+import { Order, Batch, BatchConfig } from '../lib/types';
 
 // Get the OS temporary directory
 const tmpDir = os.tmpdir();
@@ -223,7 +223,7 @@ const saveInscriptions = (inscriptionsToSave: Inscription[]): void => {
 };
 
 // In-memory storage voor orders
-export const orders: { [key: string]: Order } = getOrders();
+export const orders: Order[] = [];
 
 // Initialize inscriptions
 inscriptions = loadInscriptions();
@@ -239,10 +239,12 @@ usedTransactions = loadUsedTransactions();
  * Check of een wallet al heeft gemint in een specifieke batch
  */
 export function hasWalletMinted(batchId: number, btcAddress: string): boolean {
-  const batch = batchesConfig[batchId];
-  if (!batch) return false;
-  
-  return batch.mintedWallets > 0;
+  // Check in orders array instead of batch config
+  return orders.some(order => 
+    order.batchId === batchId && 
+    order.btcAddress === btcAddress && 
+    (order.status === 'paid' || order.status === 'completed')
+  );
 }
 
 /**
@@ -512,7 +514,7 @@ export function getAllOrders(adminPassword: string): Order[] | null {
     return null;
   }
   
-  return Object.values(orders);
+  return [...orders];
 }
 
 /**
@@ -586,7 +588,7 @@ export async function createMintOrder(
   console.log('Creating mint order:', { btcAddress, quantity, batchId });
   
   // Load existing orders
-  const existingOrders = getOrders();
+  const existingOrders = readJsonFile<Order[]>(ORDERS_FILE) || [];
   
   // Validate the BTC address
   if (!isValidOrdinalAddress(btcAddress)) {
@@ -630,11 +632,12 @@ export async function createMintOrder(
     updatedAt: new Date().toISOString()
   };
   
-  // Save order to global orders object and file
-  orders[orderId] = newOrder;
-  existingOrders[orderId] = newOrder;
+  // Add order to arrays
+  orders.push(newOrder);
+  existingOrders.push(newOrder);
   
-  const saved = saveOrders(existingOrders);
+  // Save orders to file
+  const saved = writeJsonFile(ORDERS_FILE, existingOrders);
   if (!saved) {
     throw new Error('Failed to save order');
   }
@@ -663,14 +666,10 @@ export async function createMintOrder(
 export function getOrderStatus(orderId: string): Order {
   console.log(`Looking for order with ID: ${orderId}`);
   
-  const orders = readJsonFile<{ [key: string]: Order }>(ORDERS_FILE);
-  if (!orders) {
-    throw new Error('Could not read orders file');
-  }
+  const orders = readJsonFile<Order[]>(ORDERS_FILE) || [];
+  console.log(`Available orders: ${orders.length}`);
   
-  console.log(`Available orders: ${Object.keys(orders).length}`);
-  
-  const order = orders[orderId];
+  const order = orders.find(o => o.id === orderId);
   if (!order) {
     throw new Error(`Order ${orderId} not found`);
   }
@@ -681,22 +680,28 @@ export function getOrderStatus(orderId: string): Order {
 
 /**
  * API handler voor het updaten van een order status
- * (In een echte implementatie zou dit automatisch gebeuren via webhooks of een payment processor)
  */
 export function updateOrderStatus(orderId: string, status: Order['status']): boolean {
-  const orders = readJsonFile<{ [key: string]: Order }>(ORDERS_FILE);
-  if (!orders) {
-    console.error('Could not read orders file');
-    return false;
-  }
+  const orders = readJsonFile<Order[]>(ORDERS_FILE) || [];
+  const orderIndex = orders.findIndex(o => o.id === orderId);
   
-  if (!orders[orderId]) {
+  if (orderIndex === -1) {
     console.error(`Order ${orderId} not found`);
     return false;
   }
   
-  orders[orderId].status = status;
-  orders[orderId].updatedAt = new Date().toISOString();
+  const order = orders[orderIndex];
+  order.status = status;
+  order.updatedAt = new Date().toISOString();
+  
+  // Update batch status if order is paid
+  if (status === 'paid') {
+    const batch = batchesConfig[order.batchId];
+    if (batch) {
+      batch.mintedWallets += 1;
+      updateBatchStatus(order.batchId);
+    }
+  }
   
   return writeJsonFile(ORDERS_FILE, orders);
 }

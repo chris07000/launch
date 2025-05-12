@@ -47,14 +47,14 @@ export function writeJsonFile<T>(filePath: string, data: T): boolean {
   }
 }
 
-export function getOrders(): { [key: string]: Order } {
-  const orders = readJsonFile<{ [key: string]: Order }>(ORDERS_FILE);
-  console.log(`Loaded ${orders ? Object.keys(orders).length : 0} orders from disk`);
-  return orders || {};
+export function getOrders(): Order[] {
+  const orders = readJsonFile<Order[]>(ORDERS_FILE);
+  console.log(`Loaded ${orders ? orders.length : 0} orders from disk`);
+  return orders || [];
 }
 
-export function saveOrders(orders: { [key: string]: Order }): boolean {
-  console.log(`Saving ${Object.keys(orders).length} orders to disk`);
+export function saveOrders(orders: Order[]): boolean {
+  console.log(`Saving ${orders.length} orders to disk`);
   return writeJsonFile(ORDERS_FILE, orders);
 }
 
@@ -120,7 +120,7 @@ export async function syncOrdersToBatches(password: string): Promise<boolean> {
     });
     
     // Count paid orders per batch
-    Object.values(orders).forEach(order => {
+    orders.forEach(order => {
       if (order.status === 'paid' || order.status === 'completed') {
         const batch = batches.find((b: Batch) => b.id === order.batchId);
         if (batch) {

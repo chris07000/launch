@@ -16,15 +16,17 @@ export interface Order {
   inscription?: any;
 }
 
-export interface Batch {
+export interface BatchConfig {
   id: number;
   price: number;
-  mintedWallets: number;
   maxWallets: number;
+  mintedWallets: number;
   ordinals: number;
   isSoldOut: boolean;
   isFCFS?: boolean;
 }
+
+export interface Batch extends BatchConfig {}
 
 export interface WhitelistEntry {
   address: string;
