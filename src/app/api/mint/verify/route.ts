@@ -1,123 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isWalletEligible, isWhitelisted, hasWalletMinted, isBatchAvailable, getBatchInfo, MAX_TIGERS_PER_WALLET } from '@/api/mint';
-import { sql } from '@vercel/postgres';
+import * as storage from '@/lib/storage-wrapper';
 
-export const dynamic = 'force-dynamic';
 export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get the batchId and address from the URL
-    const batchId = request.nextUrl.searchParams.get('batchId');
-    const address = request.nextUrl.searchParams.get('address');
-    
-    if (!batchId) {
-      return NextResponse.json(
-        { error: 'Batch ID is required' },
-        { status: 400 }
-      );
+    const searchParams = new URL(request.url).searchParams;
+    const batchIdParam = searchParams.get('batchId');
+    const address = searchParams.get('address');
+
+    if (!batchIdParam || !address) {
+      return NextResponse.json({ 
+        eligible: false,
+        reason: 'missing_parameters',
+        message: 'Missing required parameters' 
+      }, { status: 400 });
     }
-    
-    if (!address) {
-      return NextResponse.json(
-        { error: 'Bitcoin address is required' },
-        { status: 400 }
-      );
+
+    const batchId = parseInt(batchIdParam, 10);
+
+    // Get whitelist and minted wallets
+    const [whitelist, mintedWallets, batches] = await Promise.all([
+      storage.getWhitelist(),
+      storage.getMintedWallets(),
+      storage.getBatches()
+    ]);
+
+    // Check if the specified batch exists and is not sold out
+    const batch = batches.find(b => b.id === batchId);
+    if (!batch) {
+      return NextResponse.json({
+        eligible: false,
+        reason: 'invalid_batch',
+        message: `Batch #${batchId} not found`
+      });
     }
-    
-    const batchIdNum = parseInt(batchId, 10);
-    
-    // Check if the batch is available (not sold out)
-    const batchAvailable = await isBatchAvailable(batchIdNum);
-    if (!batchAvailable) {
-      // Get sold-out time from database
-      const { rows } = await sql`
-        SELECT sold_out_at 
-        FROM batch_sold_out_times 
-        WHERE batch_id = ${batchIdNum}
-      `;
-      
-      const soldOutTime = rows.length > 0 ? rows[0].sold_out_at : Date.now();
-      
-      // If we don't have a record yet, create one
-      if (rows.length === 0) {
-        await sql`
-          INSERT INTO batch_sold_out_times (batch_id, sold_out_at)
-          VALUES (${batchIdNum}, ${new Date().toISOString()}::timestamp)
-        `;
-      }
-      
+
+    if (batch.isSoldOut) {
       return NextResponse.json({
         eligible: false,
         reason: 'batch_sold_out',
-        message: `Batch ${batchIdNum} is sold out`,
-        soldOutAt: soldOutTime
+        message: `Batch #${batchId} is sold out`
       });
     }
-    
-    // Check if the address is whitelisted for this batch
-    const isAddressWhitelisted = await isWhitelisted(address, batchIdNum);
-    if (!isAddressWhitelisted) {
-      // Check if address is whitelisted for any other batch
-      let whitelistedBatch = null;
-      for (let i = 1; i <= 16; i++) {
-        const whitelisted = await isWhitelisted(address, i);
-        if (whitelisted) {
-          whitelistedBatch = i;
-          break;
-        }
-      }
 
+    // Check if address is whitelisted for this batch
+    const whitelistEntry = whitelist.find(entry => 
+      entry.address === address && entry.batchId === batchId
+    );
+
+    // If not whitelisted for this batch, check if whitelisted for any batch
+    if (!whitelistEntry) {
+      const anyWhitelistEntry = whitelist.find(entry => entry.address === address);
+      
       return NextResponse.json({
         eligible: false,
         reason: 'not_whitelisted',
-        message: whitelistedBatch 
-          ? `Address ${address} is whitelisted for batch ${whitelistedBatch}, not for batch ${batchIdNum}` 
-          : `Address ${address} is not whitelisted for batch ${batchIdNum}`,
-        whitelistedBatch
+        whitelistedBatch: anyWhitelistEntry ? anyWhitelistEntry.batchId : null,
+        message: anyWhitelistEntry 
+          ? `Address is whitelisted for batch #${anyWhitelistEntry.batchId}, not for batch #${batchId}` 
+          : 'Address is not whitelisted'
       });
     }
-    
-    // Check if the address has already minted from this batch
-    const hasMinted = await hasWalletMinted(batchIdNum, address);
-    if (hasMinted) {
+
+    // Check if address has already minted from this batch
+    const mintedWallet = mintedWallets.find(wallet => 
+      wallet.address === address && wallet.batchId === batchId
+    );
+
+    if (mintedWallet) {
       return NextResponse.json({
         eligible: false,
         reason: 'already_minted',
-        message: `Address ${address} has already minted from batch ${batchIdNum}`
+        message: `Address has already minted from batch #${batchId}`
       });
     }
 
-    // Get all orders for this address
-    const { rows: orderRows } = await sql`
-      SELECT * FROM orders 
-      WHERE btc_address = ${address} 
-      AND (status = 'paid' OR status = 'completed')
-    `;
-
-    // Calculate total Tigers minted
-    const totalTigersMinted = orderRows.reduce((total, order) => total + order.quantity, 0);
-    
-    if (totalTigersMinted >= MAX_TIGERS_PER_WALLET) {
+    // Check if the batch has reached its max wallets
+    if (batch.mintedWallets >= batch.maxWallets) {
+      // Update batch to sold out if it's not already marked
+      if (!batch.isSoldOut) {
+        batch.isSoldOut = true;
+        await storage.saveBatches(batches);
+      }
+      
       return NextResponse.json({
         eligible: false,
-        reason: 'max_tigers_reached',
-        message: `Address ${address} has already minted ${totalTigersMinted} Tigers (maximum: ${MAX_TIGERS_PER_WALLET})`
+        reason: 'batch_full',
+        message: `Batch #${batchId} has reached maximum wallets`
       });
     }
-    
-    // The address is eligible to mint
-    const batchInfo = await getBatchInfo(batchIdNum);
-    
+
+    // If all checks pass, the address is eligible to mint
     return NextResponse.json({
       eligible: true,
-      batch: batchInfo
+      batchId,
+      message: `Address is eligible to mint from batch #${batchId}`
     });
-  } catch (error: any) {
-    console.error('Error in verify endpoint:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to verify address' },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('Verify endpoint error:', error);
+    return NextResponse.json({
+      eligible: false,
+      reason: 'error',
+      message: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 }

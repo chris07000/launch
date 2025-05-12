@@ -1,16 +1,26 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
-import { loadWhitelist, WhitelistEntry } from '../utils';
+import { loadWhitelist } from '../utils';
+import * as storage from '@/lib/storage-wrapper';
 
+// For backward compatibility
 const CURRENT_BATCH_FILE = path.join(process.cwd(), 'data', 'current-batch.json');
 const COOLDOWN_FILE_PATH = path.join(process.cwd(), 'data', 'batch-cooldown.json');
 
 async function getCooldownMinutes(): Promise<number> {
   try {
-    const data = await fs.readFile(COOLDOWN_FILE_PATH, 'utf-8');
-    const { cooldownMinutes } = JSON.parse(data);
-    return cooldownMinutes;
+    const isVercel = process.env.VERCEL === '1';
+    
+    if (isVercel) {
+      // In production, use fixed cooldown
+      return 15;
+    } else {
+      // In local dev, read from file
+      const data = await fs.readFile(COOLDOWN_FILE_PATH, 'utf-8');
+      const cooldown = JSON.parse(data);
+      return cooldown.value || 15;
+    }
   } catch (error) {
     return 15; // Default cooldown time
   }
@@ -18,9 +28,8 @@ async function getCooldownMinutes(): Promise<number> {
 
 export async function GET() {
   try {
-    // Read current batch data
-    const data = await fs.readFile(CURRENT_BATCH_FILE, 'utf-8');
-    const { currentBatch, soldOutAt } = JSON.parse(data);
+    // Get current batch from storage wrapper
+    const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
 
     // If batch is marked as sold out, check if cooldown period has passed
     if (soldOutAt) {
@@ -31,10 +40,10 @@ export async function GET() {
       // If cooldown period has passed, increment batch and clear sold out status
       if (now - soldOutAt >= cooldownMs) {
         const newBatch = currentBatch + 1;
-        await fs.writeFile(CURRENT_BATCH_FILE, JSON.stringify({ 
+        await storage.saveCurrentBatch({ 
           currentBatch: newBatch,
           soldOutAt: null 
-        }));
+        });
         
         return NextResponse.json({ currentBatch: newBatch });
       }
@@ -60,14 +69,13 @@ export async function POST(request: Request) {
     }
 
     if (action === 'mark_sold_out') {
-      const data = await fs.readFile(CURRENT_BATCH_FILE, 'utf-8');
-      const { currentBatch } = JSON.parse(data);
+      const { currentBatch } = await storage.getCurrentBatch();
       
       // Mark current batch as sold out with timestamp
-      await fs.writeFile(CURRENT_BATCH_FILE, JSON.stringify({ 
+      await storage.saveCurrentBatch({ 
         currentBatch,
         soldOutAt: Date.now()
-      }));
+      });
 
       return NextResponse.json({ success: true });
     }

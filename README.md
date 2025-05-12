@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bitcoin Ordinals Mint
 
-## Getting Started
+This repository contains a Bitcoin Ordinals minting platform that allows:
+- Minting Tiger NFTs on the Bitcoin blockchain
+- Batch-based whitelist system
+- Admin dashboard
+- Payment verification
 
-First, run the development server:
+## Development
+
+To run the project in development mode:
 
 ```bash
+# Install dependencies
+npm install
+
+# Start the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Vercel Deployment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+This project is designed to work both locally (using file storage) and on Vercel (using PostgreSQL).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
 
-## Learn More
+1. A Vercel account
+2. Vercel Postgres database integration added to your project
 
-To learn more about Next.js, take a look at the following resources:
+### Environment Variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Make sure to add these environment variables to your Vercel project:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+# IMPORTANT - This tells the app to use database storage instead of file storage
+VERCEL=1
 
-## Deploy on Vercel
+# Admin credentials
+ADMIN_PASSWORD=your_admin_password
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Bitcoin wallet configuration
+PROJECT_BTC_WALLET=your_btc_wallet_address
+PAYMENT_BTC_WALLET=your_payment_btc_wallet
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# App configuration
+MAX_TIGERS_PER_WALLET=2
+BTC_TO_USD_RATE=99000
+
+# API URL - your Vercel deployment URL
+API_URL=https://your-vercel-url.vercel.app
+```
+
+The Postgres connection variables will be automatically added by the Vercel Postgres integration.
+
+### Deployment Steps
+
+1. Add the Vercel Postgres integration to your project
+2. Set up all environment variables
+3. Deploy the project
+
+The database will be automatically initialized during the first deployment.
+
+## Troubleshooting
+
+If you encounter issues with the admin page or minting functionality:
+
+1. Check the Vercel logs for any errors
+2. Make sure the `VERCEL=1` environment variable is set
+3. Verify that the Postgres database is properly connected
+4. Try accessing the `/api/init` endpoint to initialize the database
+
+See the [VERCEL-DEPLOY.md](./VERCEL-DEPLOY.md) file for more details.

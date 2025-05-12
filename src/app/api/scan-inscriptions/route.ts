@@ -4,60 +4,34 @@ import { sql } from '@vercel/postgres';
 export const dynamic = 'force-dynamic';
 export const runtime = 'edge';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Get all orders that need inscription scanning
-    const { rows } = await sql`
-      SELECT * FROM orders 
-      WHERE status = 'paid' 
-      AND inscription_id IS NULL 
-      ORDER BY created_at ASC
+    // Get all inscriptions from the database
+    const result = await sql`
+      SELECT i.*, o.btc_address, o.status
+      FROM inscriptions i
+      LEFT JOIN orders o ON i.order_id = o.id
+      ORDER BY i.created_at DESC
     `;
 
-    if (rows.length === 0) {
-      return NextResponse.json({ message: 'No orders to scan' });
-    }
-
-    // Process each order
-    const results = [];
-    for (const order of rows) {
-      try {
-        // Simulate scanning for inscriptions
-        // TODO: Implement actual inscription scanning logic
-        const inscriptionId = `inscription_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        
-        // Update the order with the inscription ID
-        await sql`
-          UPDATE orders 
-          SET inscription_id = ${inscriptionId},
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ${order.id}
-        `;
-
-        results.push({
-          orderId: order.id,
-          inscriptionId,
-          status: 'scanned'
-        });
-      } catch (error: any) {
-        console.error(`Error scanning order ${order.id}:`, error);
-        results.push({
-          orderId: order.id,
-          error: error.message,
-          status: 'failed'
-        });
-      }
-    }
+    const inscriptions = result.rows.map(row => ({
+      id: row.id,
+      orderId: row.order_id,
+      inscriptionId: row.inscription_id,
+      status: row.status,
+      btcAddress: row.btc_address,
+      createdAt: row.created_at
+    }));
 
     return NextResponse.json({
-      scanned: results.length,
-      results
+      status: 'success',
+      inscriptions
     });
-  } catch (error: any) {
-    console.error('Error in scan-inscriptions:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to scan inscriptions' },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('Error scanning inscriptions:', error);
+    return NextResponse.json({
+      status: 'error',
+      message: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 } 

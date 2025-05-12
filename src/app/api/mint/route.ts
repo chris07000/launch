@@ -1,11 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createMintOrder, getAllBatches, getBatchInfo } from '@/api/mint';
-import { initializeStorage } from '@/lib/storage';
-
-// Initialize storage on startup
-initializeStorage().catch(console.error);
+import * as storage from '@/lib/storage-wrapper';
 
 export const dynamic = 'force-dynamic';
+
+// Function to get batch info
+async function getBatchInfo(batchId: number) {
+  const batches = await storage.getBatches();
+  const batch = batches.find(b => b.id === batchId);
+  
+  if (!batch) {
+    throw new Error(`Batch #${batchId} not found`);
+  }
+  
+  return { batch };
+}
+
+// Function to get all batches
+async function getAllBatches() {
+  const batches = await storage.getBatches();
+  return { batches };
+}
+
+// Function to create a mint order
+async function createMintOrder(btcAddress: string, quantity: number, batchId: number) {
+  // Validate Bitcoin address format
+  if (!btcAddress.startsWith('bc1p')) {
+    throw new Error('Invalid Bitcoin address format. Must start with bc1p');
+  }
+  
+  // Get batch info
+  const batches = await storage.getBatches();
+  const batch = batches.find(b => b.id === batchId);
+  
+  if (!batch) {
+    throw new Error(`Batch #${batchId} not found`);
+  }
+  
+  if (batch.isSoldOut) {
+    throw new Error(`Batch #${batchId} is sold out`);
+  }
+  
+  // Generate a random payment address (in a real app, this would be a real BTC address)
+  const paymentAddress = process.env.PAYMENT_BTC_WALLET || 'bc1qwfdxl0pq8d4tefd80enw3yae2k2dsszemrv6j0';
+  
+  // Generate a unique payment reference
+  const paymentReference = Math.random().toString(36).substring(2, 15);
+  
+  // Create order
+  const order: storage.Order = {
+    id: `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    btcAddress,
+    quantity,
+    totalPrice: batch.price * quantity,
+    totalPriceUsd: batch.price * quantity,
+    pricePerUnit: batch.price,
+    pricePerUnitBtc: 0.00001, // Placeholder, would be calculated from real BTC rate
+    batchId,
+    paymentAddress,
+    paymentReference,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  
+  // Get existing orders
+  const orders = await storage.getOrders();
+  
+  // Add new order
+  orders.push(order);
+  
+  // Save orders
+  await storage.saveOrders(orders);
+  
+  return order;
+}
 
 export async function GET(request: NextRequest) {
   try {
