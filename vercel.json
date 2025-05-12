@@ -10,12 +10,22 @@
     }
   ],
   "functions": {
-    "src/app/api/**/*.ts": {
+    "api/*": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "src/app/api/**/*": {
       "memory": 1024,
       "maxDuration": 10
     }
   },
   "env": {
     "VERCEL": "1"
-  }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ]
 } 
