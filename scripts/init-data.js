@@ -31,7 +31,7 @@ const files = {
     { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
     { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false, isFCFS: true }
   ],
-  'orders.json': {},
+  'orders.json': [],
   'whitelist.json': [],
   'mint-start.json': { startTime: null },
   'minted-wallets.json': [],

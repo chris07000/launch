@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FaTwitter, FaDiscord, FaBitcoin } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
+import { fetchApi, handleApiError } from '@/lib/api';
 
 export default function HomePage() {
   const [isMobile, setIsMobile] = useState(false);
@@ -39,8 +40,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchBatchInfo = async () => {
       try {
-        const batchResponse = await fetch('/api/mint/current-batch');
-        const currentBatchData = await batchResponse.json();
+        const currentBatchData = await fetchApi('/api/mint/current-batch');
         
         // Update current batch
         if (currentBatchData.currentBatch) {
@@ -65,8 +65,7 @@ export default function HomePage() {
           setTimeLeft(0);
         }
         
-        const batchesResponse = await fetch('/api/mint');
-        const data = await batchesResponse.json();
+        const data = await fetchApi('/api/mint');
         
         if (data && Array.isArray(data.batches)) {
           const currentBatchData = data.batches.find((b: { id: number }) => b.id === currentBatch);
@@ -97,7 +96,7 @@ export default function HomePage() {
       clearInterval(batchInterval);
       clearInterval(countdownInterval);
     };
-  }, [currentBatch, isSoldOut]);
+  }, [currentBatch, isSoldOut, timeLeft]);
 
   // Add timer effect
   useEffect(() => {
@@ -165,6 +164,36 @@ export default function HomePage() {
     timeString += `${seconds}s`;
     
     return timeString;
+  };
+
+  // Update the wallet check function
+  const checkWallet = async () => {
+    if (!btcAddress || !btcAddress.startsWith('bc1p')) {
+      setError('Please enter a valid bc1p... address');
+      setCheckResult('');
+      return;
+    }
+
+    setIsChecking(true);
+    setError('');
+    setCheckResult('');
+
+    try {
+      const data = await fetchApi(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}`);
+
+      if (data.eligible) {
+        setCheckResult(`🎉 This address is whitelisted for Batch #${currentBatch}`);
+      } else if (data.whitelistedBatch) {
+        setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
+      } else {
+        setCheckResult(`🐯 This address is not whitelisted\nYou are not bullish enough`);
+      }
+    } catch (error) {
+      const { error: errorMessage } = handleApiError(error);
+      setError(errorMessage);
+    } finally {
+      setIsChecking(false);
+    }
   };
 
   return (
@@ -503,36 +532,7 @@ export default function HomePage() {
                     }}
                   />
                   <button
-                    onClick={async () => {
-                      if (!btcAddress || !btcAddress.startsWith('bc1p')) {
-                        setError('Please enter a valid bc1p... address');
-                        setCheckResult('');
-                        return;
-                      }
-
-                      setIsChecking(true);
-                      setError('');
-                      setCheckResult('');
-
-                      try {
-                        const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}`);
-
-                        const data = await response.json();
-
-                        if (data.eligible) {
-                          setCheckResult(`🎉 This address is whitelisted for Batch #${currentBatch}`);
-                        } else if (data.whitelistedBatch) {
-                          setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
-                        } else {
-                          setCheckResult(`🐯 This address is not whitelisted\nYou are not bullish enough`);
-                        }
-                      } catch (error) {
-                        console.error('Error checking wallet:', error);
-                        setError('An error occurred while checking your wallet.');
-                      } finally {
-                        setIsChecking(false);
-                      }
-                    }}
+                    onClick={checkWallet}
                     disabled={isChecking}
                     style={{ 
                       backgroundColor: '#ffd700',

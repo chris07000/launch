@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { readJsonFile, writeJsonFile, getOrders, saveOrders } from '../lib/storage';
-import { Order, Batch, BatchConfig } from '../lib/types';
+import { readJsonFile, writeJsonFile, getOrders, saveOrders, type Order, type Batch } from '../lib/storage';
+import { BatchConfig } from '../lib/types';
 
 // Get the OS temporary directory
 const tmpDir = os.tmpdir();

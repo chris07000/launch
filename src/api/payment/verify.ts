@@ -1,4 +1,4 @@
-import { updateOrderStatus } from '../../app/admin/actions';
+import { updateOrderStatus } from '@/api/mint';
 import { syncOrdersToBatches } from '@/lib/storage';
 
 interface Transaction {

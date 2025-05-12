@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { debugOrders } from '../admin/actions';
+import { getOrders } from '@/lib/storage';
 
 export default function DebugPage() {
   const [ordersData, setOrdersData] = useState(null);
@@ -11,8 +11,12 @@ export default function DebugPage() {
   useEffect(() => {
     async function fetchOrders() {
       try {
-        const result = await debugOrders();
-        setOrdersData(result);
+        const orders = getOrders();
+        setOrdersData({
+          success: true,
+          orders,
+          count: orders.length
+        });
       } catch (err) {
         setError(err.message);
       } finally {

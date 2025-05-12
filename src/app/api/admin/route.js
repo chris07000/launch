@@ -77,16 +77,16 @@ export async function GET(request) {
       
       // Get orders
       const ordersFile = '/tmp/orders.json';
-      let orders = {};
+      let orders = [];
       
       if (fs.existsSync(ordersFile)) {
         const ordersData = fs.readFileSync(ordersFile, 'utf8');
         try {
-          orders = JSON.parse(ordersData || '{}');
-          console.log("API: Orders loaded from file:", Object.keys(orders).length);
+          orders = JSON.parse(ordersData || '[]');
+          console.log("API: Orders loaded from file:", orders.length);
         } catch (e) {
           console.error('Error parsing orders file:', e);
-          orders = {};
+          orders = [];
         }
       } else {
         console.log("API: Orders file does not exist");
@@ -103,7 +103,7 @@ export async function GET(request) {
       
       // For debugging
       console.log("API: Sending dashboard data with orders type:", typeof orders);
-      console.log("API: Orders is empty:", Object.keys(orders).length === 0);
+      console.log("API: Orders is empty:", orders.length === 0);
       
       // Return dashboard data
       return NextResponse.json({
@@ -281,26 +281,27 @@ export async function POST(request) {
       
       // Get orders
       const ordersFile = '/tmp/orders.json';
-      let orders = {};
+      let orders = [];
       
       if (fs.existsSync(ordersFile)) {
         const ordersData = fs.readFileSync(ordersFile, 'utf8');
         try {
-          orders = JSON.parse(ordersData || '{}');
+          orders = JSON.parse(ordersData || '[]');
         } catch (e) {
           console.error('Error parsing orders file:', e);
-          orders = {};
+          orders = [];
         }
       }
       
       // Find the order
-      if (!orders[orderId]) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) {
         return NextResponse.json({ error: 'Order niet gevonden' }, { status: 404 });
       }
       
       // Assign inscription to order
       inscriptions[inscriptionIndex].assignedToOrder = orderId;
-      orders[orderId].inscriptionId = inscriptionId;
+      order.inscriptionId = inscriptionId;
       
       // Save inscriptions and orders
       fs.writeFileSync(inscriptionsFile, JSON.stringify(inscriptions));
@@ -365,15 +366,15 @@ export async function POST(request) {
       
       // Get orders
       const ordersFile = '/tmp/orders.json';
-      let orders = {};
+      let orders = [];
       
       if (fs.existsSync(ordersFile)) {
         const ordersData = fs.readFileSync(ordersFile, 'utf8');
         try {
-          orders = JSON.parse(ordersData || '{}');
+          orders = JSON.parse(ordersData || '[]');
         } catch (e) {
           console.error('Error parsing orders file:', e);
-          orders = {};
+          orders = [];
         }
       }
       
@@ -397,7 +398,7 @@ export async function POST(request) {
       };
       
       // Add to orders array
-      orders[newOrder.id] = newOrder;
+      orders.push(newOrder);
       
       // Save to file
       fs.writeFileSync(ordersFile, JSON.stringify(orders, null, 2));
@@ -453,7 +454,7 @@ export async function POST(request) {
         // Reset orders
         fs.writeFileSync(
           path.join(dataDir, 'orders.json'),
-          JSON.stringify({})
+          JSON.stringify([])
         );
         
         // Reset inscriptions

@@ -3,6 +3,9 @@ import path from 'path';
 import os from 'os';
 import { Order, Batch, WhitelistEntry, MintedWallet } from './types';
 
+// Re-export types
+export type { Order, Batch, WhitelistEntry, MintedWallet };
+
 // Get the OS temporary directory
 const tmpDir = os.tmpdir();
 
@@ -23,14 +26,13 @@ export function ensureDirectoryExists(filePath: string) {
 // Helper function to read JSON file
 export function readJsonFile<T>(filePath: string): T | null {
   try {
-    ensureDirectoryExists(filePath);
     if (!fs.existsSync(filePath)) {
       return null;
     }
     const data = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(data || '{}');
+    return JSON.parse(data);
   } catch (error) {
-    console.error(`Error reading ${filePath}:`, error);
+    console.error(`Error reading file ${filePath}:`, error);
     return null;
   }
 }
@@ -42,19 +44,27 @@ export function writeJsonFile<T>(filePath: string, data: T): boolean {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {
-    console.error(`Error writing ${filePath}:`, error);
+    console.error(`Error writing file ${filePath}:`, error);
     return false;
   }
 }
 
-export function getOrders(): Order[] {
-  const orders = readJsonFile<Order[]>(ORDERS_FILE);
-  console.log(`Loaded ${orders ? orders.length : 0} orders from disk`);
-  return orders || [];
+// Initialize orders file if it doesn't exist
+export function initializeOrdersFile() {
+  if (!fs.existsSync(ORDERS_FILE)) {
+    ensureDirectoryExists(ORDERS_FILE);
+    writeJsonFile(ORDERS_FILE, []);
+  }
 }
 
+// Get orders from file
+export function getOrders(): Order[] {
+  initializeOrdersFile();
+  return readJsonFile<Order[]>(ORDERS_FILE) || [];
+}
+
+// Save orders to file
 export function saveOrders(orders: Order[]): boolean {
-  console.log(`Saving ${orders.length} orders to disk`);
   return writeJsonFile(ORDERS_FILE, orders);
 }
 
@@ -104,40 +114,52 @@ export function saveMintedWallets(mintedWallets: MintedWallet[]): boolean {
   return writeJsonFile(MINTED_WALLETS_FILE, mintedWallets);
 }
 
-export async function syncOrdersToBatches(password: string): Promise<boolean> {
-  try {
-    if (!password || password !== process.env.ADMIN_PASSWORD) {
-      console.error('Invalid password for syncOrdersToBatches');
-      return false;
-    }
+// Sync orders to batches
+export async function syncOrdersToBatches(adminPassword: string): Promise<boolean> {
+  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+    return false;
+  }
 
+  try {
     const orders = getOrders();
     const batches = getBatches();
-    
-    // Reset mintedWallets count
-    batches.forEach((batch: Batch) => {
+    const mintedWallets = getMintedWallets();
+
+    // Reset mintedWallets count for all batches
+    batches.forEach(batch => {
       batch.mintedWallets = 0;
     });
-    
-    // Count paid orders per batch
+
+    // Count minted wallets per batch
     orders.forEach(order => {
       if (order.status === 'paid' || order.status === 'completed') {
-        const batch = batches.find((b: Batch) => b.id === order.batchId);
+        const batch = batches.find(b => b.id === order.batchId);
         if (batch) {
-          batch.mintedWallets += 1;
+          batch.mintedWallets++;
+        }
+
+        // Add to mintedWallets if not already present
+        const existingWallet = mintedWallets.find(
+          w => w.address === order.btcAddress && w.batchId === order.batchId
+        );
+        if (!existingWallet) {
+          mintedWallets.push({
+            address: order.btcAddress,
+            batchId: order.batchId,
+            quantity: order.quantity,
+            timestamp: new Date().toISOString()
+          });
         }
       }
     });
-    
-    // Update isSoldOut status
-    batches.forEach((batch: Batch) => {
-      batch.isSoldOut = batch.mintedWallets >= batch.maxWallets;
-    });
-    
-    // Save updated batches
-    return saveBatches(batches);
+
+    // Save updated batches and minted wallets
+    await saveBatches(batches);
+    await saveMintedWallets(mintedWallets);
+
+    return true;
   } catch (error) {
-    console.error('Error in syncOrdersToBatches:', error);
+    console.error('Error syncing orders to batches:', error);
     return false;
   }
 } 

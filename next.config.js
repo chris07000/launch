@@ -43,7 +43,8 @@ const nextConfig = {
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
     PROJECT_BTC_WALLET: process.env.PROJECT_BTC_WALLET,
     MAX_TIGERS_PER_WALLET: process.env.MAX_TIGERS_PER_WALLET,
-    BTC_TO_USD_RATE: process.env.BTC_TO_USD_RATE
+    BTC_TO_USD_RATE: process.env.BTC_TO_USD_RATE,
+    API_URL: process.env.API_URL || 'https://www.tigerlaunchad.xyz'
   }
 };
 

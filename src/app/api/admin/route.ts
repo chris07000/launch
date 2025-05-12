@@ -10,7 +10,8 @@ import {
   saveMintedWallets,
   type WhitelistEntry,
   type Batch,
-  type Order
+  type Order,
+  type MintedWallet
 } from '@/lib/storage';
 
 // Validate a Bitcoin Ordinal address (bc1p...)
