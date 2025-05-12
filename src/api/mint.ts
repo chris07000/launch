@@ -5,10 +5,9 @@ import {
   getOrders, 
   saveOrders, 
   getBatches,
-  saveBatches,
-  Order,
-  Batch 
+  saveBatches
 } from '@/lib/storage';
+import { Order, Batch } from '@/lib/types';
 import { Order as OrderType } from '@/lib/types';
 
 // Batches configuratie
@@ -665,8 +664,8 @@ export async function createMintOrder(
     paymentAddress: PAYMENT_BTC_ADDRESS,
     paymentReference,
     status: 'pending',
-    createdAt: new Date(),
-    updatedAt: new Date()
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
   
   // Save order to global orders object and file
