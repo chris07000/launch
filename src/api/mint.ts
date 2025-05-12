@@ -1,7 +1,19 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { readJsonFile, writeJsonFile, getOrders, saveOrders, type Order, type Batch } from '../lib/storage';
+import { 
+  readJsonFile, 
+  writeJsonFile, 
+  getOrders, 
+  saveOrders, 
+  getBatches,
+  saveBatches,
+  getWhitelist,
+  saveWhitelist,
+  type Order, 
+  type Batch,
+  type WhitelistEntry
+} from '../lib/storage';
 import { BatchConfig } from '../lib/types';
 
 // Get the OS temporary directory
@@ -31,12 +43,7 @@ const INSCRIPTIONS_FILE_PATH = path.join(process.cwd(), 'data', 'inscriptions.js
 // File path for whitelist
 const WHITELIST_FILE_PATH = path.join(process.cwd(), 'data', 'whitelist.json');
 
-// Whitelist interface
-interface WhitelistEntry {
-  address: string;
-  batchId: number; // The batch this address is whitelisted for
-  createdAt?: string; // Optional timestamp
-}
+// Whitelist interface is now imported from storage.ts, so we can remove it here
 
 // Het BTC adres waar alle betalingen naartoe gaan (project wallet)
 const PROJECT_BTC_ADDRESS = process.env.PROJECT_BTC_WALLET || 'bc1p9rf34vgvaz2rswpqh7d0zdvghzqreglp8qzk9eun3fscyj6pm5kqk96605';
@@ -62,46 +69,9 @@ let usedTransactions: UsedTransaction[] = [];
 // Houdt bij wanneer een batch sold out is gegaan
 let batchSoldOutTimers: Record<number, Date> = {};
 
-// Load whitelist from disk
-const loadWhitelist = (): WhitelistEntry[] => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    // Check if whitelist file exists
-    if (!fs.existsSync(WHITELIST_FILE_PATH)) {
-      return [];
-    }
-    
-    const whitelistData = fs.readFileSync(WHITELIST_FILE_PATH, 'utf8');
-    const parsedWhitelist = JSON.parse(whitelistData);
-    
-    console.log(`Loaded ${parsedWhitelist.length} whitelist entries from disk`);
-    return parsedWhitelist;
-  } catch (error) {
-    console.error('Error loading whitelist from disk:', error);
-    return [];
-  }
-};
-
-// Save whitelist to disk
-const saveWhitelist = (whitelistToSave: WhitelistEntry[]): void => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(WHITELIST_FILE_PATH, JSON.stringify(whitelistToSave, null, 2));
-    console.log(`Saved ${whitelistToSave.length} whitelist entries to disk`);
-  } catch (error) {
-    console.error('Error saving whitelist to disk:', error);
-  }
-};
+// Load whitelist
+whitelistedAddresses = getWhitelist();
+console.log('Whitelist loaded with entries:', whitelistedAddresses);
 
 // Load used transactions from disk
 const loadUsedTransactions = (): UsedTransaction[] => {
@@ -215,10 +185,6 @@ export const orders: Order[] = [];
 
 // Initialize inscriptions
 inscriptions = loadInscriptions();
-
-// Initialize whitelist
-whitelistedAddresses = loadWhitelist();
-console.log('Whitelist loaded with entries:', whitelistedAddresses);
 
 // Initialize used transactions
 usedTransactions = loadUsedTransactions();
@@ -398,7 +364,11 @@ export function addToWhitelist(address: string, adminPassword: string, batchId: 
   const existingIndex = whitelistedAddresses.findIndex(entry => entry.address === address);
   if (existingIndex !== -1) {
     // Update the batch if the address already exists
-    whitelistedAddresses[existingIndex].batchId = batchId;
+    whitelistedAddresses[existingIndex] = {
+      ...whitelistedAddresses[existingIndex],
+      batchId,
+      createdAt: whitelistedAddresses[existingIndex].createdAt || new Date().toISOString()
+    };
   } else {
     // Add new entry if address doesn't exist
     whitelistedAddresses.push({ 

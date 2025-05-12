@@ -9,7 +9,7 @@ export type { Order, Batch, WhitelistEntry, MintedWallet };
 // Get the OS temporary directory
 const tmpDir = os.tmpdir();
 
-// Constants for file paths
+// Constants for file paths - everything in /tmp
 const ORDERS_FILE = path.join(tmpDir, 'orders.json');
 const BATCHES_FILE = path.join(tmpDir, 'batches.json');
 const WHITELIST_FILE = path.join(tmpDir, 'whitelist.json');
@@ -65,14 +65,16 @@ export function getOrders(): Order[] {
 
 // Save orders to file
 export function saveOrders(orders: Order[]): boolean {
+  initializeOrdersFile();
   return writeJsonFile(ORDERS_FILE, orders);
 }
 
+// Get batches from file
 export function getBatches(): Batch[] {
   const batches = readJsonFile<Batch[]>(BATCHES_FILE);
   if (!batches) {
     // Return default batches if file doesn't exist
-    return [
+    const defaultBatches = [
       { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
       { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
       { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
@@ -88,28 +90,35 @@ export function getBatches(): Batch[] {
       { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
       { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
       { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-      { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false, isFCFS: true }
+      { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
     ];
+    writeJsonFile(BATCHES_FILE, defaultBatches);
+    return defaultBatches;
   }
   return batches;
 }
 
+// Save batches to file
 export function saveBatches(batches: Batch[]): boolean {
   return writeJsonFile(BATCHES_FILE, batches);
 }
 
+// Get whitelist from file
 export function getWhitelist(): WhitelistEntry[] {
   return readJsonFile<WhitelistEntry[]>(WHITELIST_FILE) || [];
 }
 
+// Save whitelist to file
 export function saveWhitelist(whitelist: WhitelistEntry[]): boolean {
   return writeJsonFile(WHITELIST_FILE, whitelist);
 }
 
+// Get minted wallets from file
 export function getMintedWallets(): MintedWallet[] {
   return readJsonFile<MintedWallet[]>(MINTED_WALLETS_FILE) || [];
 }
 
+// Save minted wallets to file
 export function saveMintedWallets(mintedWallets: MintedWallet[]): boolean {
   return writeJsonFile(MINTED_WALLETS_FILE, mintedWallets);
 }
