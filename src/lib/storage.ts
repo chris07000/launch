@@ -1,131 +1,144 @@
+import { sql } from '@vercel/postgres';
 import { Order, Batch, WhitelistEntry, MintedWallet } from './types';
-import * as db from './db';
 
 // Re-export types
 export type { Order, Batch, WhitelistEntry, MintedWallet };
 
-// Get orders from database
+// Get all orders
 export async function getOrders(): Promise<Order[]> {
-  console.log('Getting orders from database');
-  try {
-    const orders = await db.getOrders();
-    console.log('Retrieved orders:', orders);
-    return orders;
-  } catch (error) {
-    console.error('Error getting orders:', error);
-    return [];
-  }
+  const { rows } = await sql`SELECT * FROM orders ORDER BY created_at DESC`;
+  return rows.map(row => ({
+    id: row.id,
+    btcAddress: row.btc_address,
+    quantity: row.quantity,
+    totalPrice: row.total_price,
+    totalPriceUsd: row.total_price_usd,
+    pricePerUnit: row.price_per_unit,
+    pricePerUnitBtc: row.price_per_unit_btc,
+    batchId: row.batch_id,
+    paymentAddress: row.payment_address,
+    paymentReference: row.payment_reference,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
 }
 
-// Save order to database
-export async function saveOrder(order: Order): Promise<boolean> {
-  console.log('Saving order to database:', order);
-  try {
-    const result = await db.saveOrder(order);
-    console.log('Save result:', result);
-    return result;
-  } catch (error) {
-    console.error('Error saving order:', error);
-    return false;
-  }
-}
-
-// Save multiple orders to database
+// Save orders
 export async function saveOrders(orders: Order[]): Promise<boolean> {
-  console.log('Saving multiple orders to database');
   try {
-    // Save each order individually
-    const results = await Promise.all(orders.map(order => db.saveOrder(order)));
-    return results.every(result => result === true);
+    // Clear existing orders and insert new ones
+    await sql`TRUNCATE orders`;
+    
+    for (const order of orders) {
+      await sql`
+        INSERT INTO orders (
+          id, btc_address, quantity, total_price, total_price_usd,
+          price_per_unit, price_per_unit_btc, batch_id, payment_address,
+          payment_reference, status, created_at, updated_at
+        ) VALUES (
+          ${order.id}, ${order.btcAddress}, ${order.quantity}, ${order.totalPrice},
+          ${order.totalPriceUsd}, ${order.pricePerUnit}, ${order.pricePerUnitBtc},
+          ${order.batchId}, ${order.paymentAddress}, ${order.paymentReference},
+          ${order.status}, ${order.createdAt}, ${order.updatedAt}
+        )
+      `;
+    }
+    return true;
   } catch (error) {
     console.error('Error saving orders:', error);
     return false;
   }
 }
 
-// Get batches from database
+// Get all batches
 export async function getBatches(): Promise<Batch[]> {
-  try {
-    const batches = await db.getBatches();
-    if (batches.length === 0) {
-      // Return and save default batches if none exist
-      const defaultBatches = [
-        { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 4, price: 282.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 5, price: 292.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 6, price: 303.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 7, price: 314.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 8, price: 325.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 9, price: 335.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 10, price: 346.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 11, price: 357.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 12, price: 367.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-        { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
-      ];
-      await Promise.all(defaultBatches.map(batch => db.saveBatch(batch)));
-      return defaultBatches;
-    }
-    return batches;
-  } catch (error) {
-    console.error('Error getting batches:', error);
-    return [];
-  }
+  const { rows } = await sql`SELECT * FROM batches ORDER BY id`;
+  return rows.map(row => ({
+    id: row.id,
+    price: row.price,
+    mintedWallets: row.minted_wallets,
+    maxWallets: row.max_wallets,
+    ordinals: row.ordinals,
+    isSoldOut: row.is_sold_out
+  }));
 }
 
-// Save batches to database
+// Save batches
 export async function saveBatches(batches: Batch[]): Promise<boolean> {
   try {
-    const results = await Promise.all(batches.map(batch => db.saveBatch(batch)));
-    return results.every(result => result === true);
+    // Clear existing batches and insert new ones
+    await sql`TRUNCATE batches`;
+    
+    for (const batch of batches) {
+      await sql`
+        INSERT INTO batches (
+          id, price, minted_wallets, max_wallets, ordinals, is_sold_out
+        ) VALUES (
+          ${batch.id}, ${batch.price}, ${batch.mintedWallets},
+          ${batch.maxWallets}, ${batch.ordinals}, ${batch.isSoldOut}
+        )
+      `;
+    }
+    return true;
   } catch (error) {
     console.error('Error saving batches:', error);
     return false;
   }
 }
 
-// Get whitelist from database
+// Get whitelist
 export async function getWhitelist(): Promise<WhitelistEntry[]> {
-  try {
-    return await db.getWhitelist();
-  } catch (error) {
-    console.error('Error getting whitelist:', error);
-    return [];
-  }
+  const { rows } = await sql`SELECT * FROM whitelist ORDER BY created_at`;
+  return rows.map(row => ({
+    address: row.address,
+    batchId: row.batch_id,
+    createdAt: row.created_at
+  }));
 }
 
-// Save whitelist to database
-export async function saveWhitelist(whitelist: WhitelistEntry[]): Promise<boolean> {
+// Save whitelist
+export async function saveWhitelist(entries: WhitelistEntry[]): Promise<boolean> {
   try {
-    const results = await Promise.all(whitelist.map(entry => db.saveWhitelistEntry(entry)));
-    return results.every(result => result === true);
+    // Clear existing whitelist and insert new entries
+    await sql`TRUNCATE whitelist`;
+    
+    for (const entry of entries) {
+      await sql`
+        INSERT INTO whitelist (address, batch_id, created_at)
+        VALUES (${entry.address}, ${entry.batchId}, ${entry.createdAt})
+      `;
+    }
+    return true;
   } catch (error) {
     console.error('Error saving whitelist:', error);
     return false;
   }
 }
 
-// Get minted wallets from database
+// Get minted wallets
 export async function getMintedWallets(): Promise<MintedWallet[]> {
-  try {
-    return await db.getMintedWallets();
-  } catch (error) {
-    console.error('Error getting minted wallets:', error);
-    return [];
-  }
+  const { rows } = await sql`SELECT * FROM minted_wallets ORDER BY timestamp`;
+  return rows.map(row => ({
+    address: row.address,
+    batchId: row.batch_id,
+    quantity: row.quantity,
+    timestamp: row.timestamp
+  }));
 }
 
-// Save minted wallets to database
-export async function saveMintedWallets(mintedWallets: MintedWallet[]): Promise<boolean> {
+// Save minted wallet
+export async function saveMintedWallet(wallet: MintedWallet): Promise<boolean> {
   try {
-    const results = await Promise.all(mintedWallets.map(wallet => db.saveMintedWallet(wallet)));
-    return results.every(result => result === true);
+    await sql`
+      INSERT INTO minted_wallets (address, batch_id, quantity, timestamp)
+      VALUES (${wallet.address}, ${wallet.batchId}, ${wallet.quantity}, ${wallet.timestamp})
+      ON CONFLICT (address, batch_id) 
+      DO UPDATE SET quantity = minted_wallets.quantity + EXCLUDED.quantity
+    `;
+    return true;
   } catch (error) {
-    console.error('Error saving minted wallets:', error);
+    console.error('Error saving minted wallet:', error);
     return false;
   }
 }
@@ -133,7 +146,10 @@ export async function saveMintedWallets(mintedWallets: MintedWallet[]): Promise<
 // Initialize database
 export async function initializeStorage(): Promise<void> {
   try {
-    await db.initializeDatabase();
+    await sql`TRUNCATE orders`;
+    await sql`TRUNCATE batches`;
+    await sql`TRUNCATE whitelist`;
+    await sql`TRUNCATE minted_wallets`;
     console.log('Storage initialized successfully');
   } catch (error) {
     console.error('Error initializing storage:', error);
