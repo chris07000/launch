@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
-import { initializeStorage } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 const defaultBatches = [
   { id: 1, price: 250.00, maxWallets: 33, ordinals: 66, mintedWallets: 0, isSoldOut: false },
@@ -23,80 +23,152 @@ const defaultBatches = [
   { id: 16, price: 450.00, maxWallets: 33, ordinals: 66, mintedWallets: 0, isSoldOut: false }
 ];
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const steps: { step: string; status: 'success' | 'error'; error?: any }[] = [];
+  
   try {
-    // Initialize storage (clear all tables)
-    await initializeStorage();
+    // Step 1: Test database connection
+    try {
+      await sql`SELECT NOW()`;
+      steps.push({ step: 'Database connection', status: 'success' });
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Database connection', 
+        status: 'error',
+        error: error.message 
+      });
+      throw error;
+    }
 
-    // Create tables if they don't exist
-    await sql`
-      CREATE TABLE IF NOT EXISTS orders (
-        id VARCHAR(255) PRIMARY KEY,
-        btc_address VARCHAR(255) NOT NULL,
-        quantity INTEGER NOT NULL,
-        total_price DECIMAL(20,8) NOT NULL,
-        total_price_usd DECIMAL(10,2) NOT NULL,
-        price_per_unit DECIMAL(10,2) NOT NULL,
-        price_per_unit_btc DECIMAL(20,8) NOT NULL,
-        batch_id INTEGER NOT NULL,
-        payment_address VARCHAR(255) NOT NULL,
-        payment_reference VARCHAR(255) NOT NULL,
-        status VARCHAR(50) NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS batches (
-        id INTEGER PRIMARY KEY,
-        price DECIMAL(10,2) NOT NULL,
-        minted_wallets INTEGER NOT NULL DEFAULT 0,
-        max_wallets INTEGER NOT NULL,
-        ordinals INTEGER NOT NULL,
-        is_sold_out BOOLEAN NOT NULL DEFAULT FALSE
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS whitelist (
-        address VARCHAR(255) PRIMARY KEY,
-        batch_id INTEGER NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS minted_wallets (
-        address VARCHAR(255) NOT NULL,
-        batch_id INTEGER NOT NULL,
-        quantity INTEGER NOT NULL,
-        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (address, batch_id)
-      );
-    `;
-
-    // Import default batches
-    for (const batch of defaultBatches) {
+    // Step 2: Create orders table
+    try {
       await sql`
-        INSERT INTO batches (id, price, minted_wallets, max_wallets, ordinals, is_sold_out)
-        VALUES (${batch.id}, ${batch.price}, ${batch.mintedWallets}, ${batch.maxWallets}, ${batch.ordinals}, ${batch.isSoldOut})
-        ON CONFLICT (id) DO UPDATE SET
-          price = EXCLUDED.price,
-          max_wallets = EXCLUDED.max_wallets,
-          ordinals = EXCLUDED.ordinals
+        CREATE TABLE IF NOT EXISTS orders (
+          id VARCHAR(255) PRIMARY KEY,
+          btc_address VARCHAR(255) NOT NULL,
+          quantity INTEGER NOT NULL,
+          total_price DECIMAL(20,8) NOT NULL,
+          total_price_usd DECIMAL(10,2) NOT NULL,
+          price_per_unit DECIMAL(10,2) NOT NULL,
+          price_per_unit_btc DECIMAL(20,8) NOT NULL,
+          batch_id INTEGER NOT NULL,
+          payment_address VARCHAR(255) NOT NULL,
+          payment_reference VARCHAR(255) NOT NULL,
+          status VARCHAR(50) NOT NULL,
+          inscription_id VARCHAR(255),
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
       `;
+      steps.push({ step: 'Create orders table', status: 'success' });
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Create orders table', 
+        status: 'error',
+        error: error.message 
+      });
+      throw error;
+    }
+
+    // Step 3: Create batches table
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS batches (
+          id INTEGER PRIMARY KEY,
+          price DECIMAL(10,2) NOT NULL,
+          minted_wallets INTEGER NOT NULL DEFAULT 0,
+          max_wallets INTEGER NOT NULL,
+          ordinals INTEGER NOT NULL,
+          is_sold_out BOOLEAN NOT NULL DEFAULT FALSE
+        )
+      `;
+      steps.push({ step: 'Create batches table', status: 'success' });
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Create batches table', 
+        status: 'error',
+        error: error.message 
+      });
+      throw error;
+    }
+
+    // Step 4: Create whitelist table
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS whitelist (
+          address VARCHAR(255) PRIMARY KEY,
+          batch_id INTEGER NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      steps.push({ step: 'Create whitelist table', status: 'success' });
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Create whitelist table', 
+        status: 'error',
+        error: error.message 
+      });
+      throw error;
+    }
+
+    // Step 5: Create minted_wallets table
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS minted_wallets (
+          address VARCHAR(255) NOT NULL,
+          batch_id INTEGER NOT NULL,
+          quantity INTEGER NOT NULL,
+          timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (address, batch_id)
+        )
+      `;
+      steps.push({ step: 'Create minted_wallets table', status: 'success' });
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Create minted_wallets table', 
+        status: 'error',
+        error: error.message 
+      });
+      throw error;
+    }
+
+    // Step 6: Import default batches
+    try {
+      for (const batch of defaultBatches) {
+        await sql`
+          INSERT INTO batches (id, price, minted_wallets, max_wallets, ordinals, is_sold_out)
+          VALUES (${batch.id}, ${batch.price}, ${batch.mintedWallets}, ${batch.maxWallets}, ${batch.ordinals}, ${batch.isSoldOut})
+          ON CONFLICT (id) DO UPDATE SET
+            price = EXCLUDED.price,
+            max_wallets = EXCLUDED.max_wallets,
+            ordinals = EXCLUDED.ordinals
+        `;
+      }
+      steps.push({ step: 'Import default batches', status: 'success' });
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Import default batches', 
+        status: 'error',
+        error: error.message 
+      });
+      throw error;
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Database initialized successfully'
+      message: 'Database initialized successfully',
+      steps,
+      environment: process.env.VERCEL_ENV || 'development',
+      database: process.env.POSTGRES_DATABASE
     });
   } catch (error: any) {
     console.error('Error initializing database:', error);
     return NextResponse.json({
       success: false,
-      error: error.message
+      error: error.message,
+      steps,
+      environment: process.env.VERCEL_ENV || 'development',
+      database: process.env.POSTGRES_DATABASE
     }, { status: 500 });
   }
 } 
