@@ -75,8 +75,12 @@ export async function GET(request: Request) {
       const orders = getOrders();
       const mintedWallets = getMintedWallets();
       
-      // Convert orders object to array
-      const ordersArray = Object.values(orders);
+      // Convert orders object to array and sort by creation date (newest first)
+      const ordersArray = Object.values(orders).sort((a, b) => {
+        const dateA = new Date(a.createdAt);
+        const dateB = new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      });
       
       // Return dashboard data
       return NextResponse.json({
