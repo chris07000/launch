@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const MINT_START_FILE = path.join(process.cwd(), 'data', 'mint-start.json');
+// In production (Vercel) use /tmp, otherwise use data directory
+const BASE_DIR = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'data');
+const MINT_START_FILE = path.join(BASE_DIR, 'mint-start.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bitcointigers2024';
 
 // GET endpoint om de start tijd op te halen
@@ -31,14 +33,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
     }
 
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(BASE_DIR)) {
+      fs.mkdirSync(BASE_DIR, { recursive: true });
     }
 
     // Save the start time
     fs.writeFileSync(MINT_START_FILE, JSON.stringify({ startTime }));
+    console.log('Successfully wrote to', MINT_START_FILE); // Debug log
 
     return NextResponse.json({ success: true });
   } catch (error) {
