@@ -1,5 +1,4 @@
 import { updateOrderStatus } from '@/api/mint';
-import { syncOrdersToBatches } from '@/lib/storage';
 
 interface Transaction {
   vout: {

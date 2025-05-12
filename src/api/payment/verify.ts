@@ -1,5 +1,4 @@
 import { updateOrderStatus } from '@/api/mint';
-import { syncOrdersToBatches } from '@/lib/storage';
 
 interface Transaction {
   vout: {
@@ -42,11 +41,6 @@ export async function verifyPayment(
     console.log('Payment detected! Updating order status to paid');
     try {
       await updateOrderStatus(orderId, 'paid');
-      
-      // Sync orders with batches
-      if (process.env.ADMIN_PASSWORD) {
-        await syncOrdersToBatches(process.env.ADMIN_PASSWORD);
-      }
       
       return true;
     } catch (error) {
