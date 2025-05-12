@@ -75,12 +75,15 @@ export async function GET(request: Request) {
       const orders = getOrders();
       const mintedWallets = getMintedWallets();
       
+      // Convert orders object to array
+      const ordersArray = Object.values(orders);
+      
       // Return dashboard data
       return NextResponse.json({
         whitelistedAddresses,
         batches,
         currentBatch: currentBatch.id,
-        orders,
+        orders: ordersArray,
         mintedWallets
       });
     } catch (error) {
