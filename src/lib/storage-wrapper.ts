@@ -286,6 +286,63 @@ export async function initializeStorage(): Promise<boolean> {
         )
       `;
       
+      await sql`
+        CREATE TABLE IF NOT EXISTS batches (
+          id INTEGER PRIMARY KEY,
+          price NUMERIC NOT NULL,
+          minted_wallets INTEGER DEFAULT 0,
+          max_wallets INTEGER NOT NULL,
+          ordinals INTEGER NOT NULL,
+          is_sold_out BOOLEAN DEFAULT FALSE,
+          is_fcfs BOOLEAN DEFAULT FALSE
+        )
+      `;
+      
+      await sql`
+        CREATE TABLE IF NOT EXISTS orders (
+          id TEXT PRIMARY KEY,
+          btc_address TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          total_price NUMERIC NOT NULL,
+          total_price_usd NUMERIC NOT NULL,
+          price_per_unit NUMERIC NOT NULL,
+          price_per_unit_btc NUMERIC NOT NULL,
+          batch_id INTEGER NOT NULL,
+          payment_address TEXT NOT NULL,
+          payment_reference TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `;
+      
+      await sql`
+        CREATE TABLE IF NOT EXISTS whitelist (
+          address TEXT PRIMARY KEY,
+          batch_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `;
+      
+      await sql`
+        CREATE TABLE IF NOT EXISTS minted_wallets (
+          id SERIAL PRIMARY KEY,
+          address TEXT NOT NULL,
+          batch_id INTEGER NOT NULL,
+          quantity INTEGER NOT NULL,
+          timestamp TEXT NOT NULL
+        )
+      `;
+      
+      await sql`
+        CREATE TABLE IF NOT EXISTS used_transactions (
+          tx_id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL,
+          amount NUMERIC NOT NULL,
+          timestamp TIMESTAMP NOT NULL
+        )
+      `;
+      
       // Check if current_batch has data
       const { rows } = await sql`SELECT COUNT(*) as count FROM current_batch`;
       if (rows[0].count === 0) {
@@ -304,7 +361,12 @@ export async function initializeStorage(): Promise<boolean> {
       
       // Create necessary files with default data if they don't exist
       const files = {
-        'current-batch.json': { currentBatch: 1, soldOutAt: null }
+        'current-batch.json': { currentBatch: 1, soldOutAt: null },
+        'batches.json': [],
+        'orders.json': [],
+        'whitelist.json': [],
+        'minted-wallets.json': [],
+        'used-transactions.json': {}
       };
       
       for (const [filename, defaultData] of Object.entries(files)) {

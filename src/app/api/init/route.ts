@@ -3,7 +3,6 @@ import { sql } from '@vercel/postgres';
 import * as storage from '@/lib/storage-wrapper';
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'edge';
 
 // Define a more flexible type for steps
 type Step = {
