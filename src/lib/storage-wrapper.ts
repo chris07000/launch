@@ -3,8 +3,21 @@
  * Automatically switches between file-based storage (local) and database storage (Vercel)
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+// Dynamic imports for Node.js modules
+let fs: any;
+let path: any;
+
+// Only import fs/promises and path in non-Vercel environment
+if (typeof process !== 'undefined' && process.env.VERCEL !== '1') {
+  // We're in a Node.js environment and not on Vercel
+  import('fs/promises').then(module => {
+    fs = module.default;
+  });
+  import('path').then(module => {
+    path = module.default;
+  });
+}
+
 import { sql } from '@vercel/postgres';
 import { 
   Order, 
@@ -18,11 +31,12 @@ export type { Order, Batch, WhitelistEntry, MintedWallet };
 
 // Detect environment
 const isVercel = process.env.VERCEL === '1';
-const dataDir = path.join(process.cwd(), 'data');
+// For local environment, create dataDir only if not on Vercel
+const dataDir = !isVercel && typeof path !== 'undefined' ? path.join(process.cwd(), 'data') : '';
 
 // Helper to ensure data directory exists (local only)
 async function ensureDataDir() {
-  if (!isVercel) {
+  if (!isVercel && fs) {
     try {
       await fs.access(dataDir);
     } catch {
@@ -52,6 +66,10 @@ export async function getOrders(): Promise<Order[]> {
     }));
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return [];
+      }
       const data = await fs.readFile(path.join(dataDir, 'orders.json'), 'utf-8');
       return JSON.parse(data);
     } catch (error) {
@@ -89,6 +107,10 @@ export async function saveOrders(orders: Order[]): Promise<boolean> {
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return false;
+      }
       await ensureDataDir();
       await fs.writeFile(
         path.join(dataDir, 'orders.json'),
@@ -117,6 +139,10 @@ export async function getBatches(): Promise<Batch[]> {
     }));
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return [];
+      }
       const data = await fs.readFile(path.join(dataDir, 'batches.json'), 'utf-8');
       return JSON.parse(data);
     } catch (error) {
@@ -150,6 +176,10 @@ export async function saveBatches(batches: Batch[]): Promise<boolean> {
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return false;
+      }
       await ensureDataDir();
       await fs.writeFile(
         path.join(dataDir, 'batches.json'),
@@ -174,6 +204,10 @@ export async function getWhitelist(): Promise<WhitelistEntry[]> {
     }));
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return [];
+      }
       const data = await fs.readFile(path.join(dataDir, 'whitelist.json'), 'utf-8');
       return JSON.parse(data);
     } catch (error) {
@@ -203,6 +237,10 @@ export async function saveWhitelist(entries: WhitelistEntry[]): Promise<boolean>
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return false;
+      }
       await ensureDataDir();
       await fs.writeFile(
         path.join(dataDir, 'whitelist.json'),
@@ -235,6 +273,10 @@ export async function getCurrentBatch(): Promise<{ currentBatch: number, soldOut
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return { currentBatch: 1, soldOutAt: null };
+      }
       const data = await fs.readFile(path.join(dataDir, 'current-batch.json'), 'utf-8');
       return JSON.parse(data);
     } catch (error) {
@@ -260,6 +302,10 @@ export async function saveCurrentBatch(data: { currentBatch: number, soldOutAt: 
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return false;
+      }
       await ensureDataDir();
       await fs.writeFile(
         path.join(dataDir, 'current-batch.json'),
@@ -357,6 +403,10 @@ export async function initializeStorage(): Promise<boolean> {
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return false;
+      }
       await ensureDataDir();
       
       // Create necessary files with default data if they don't exist
@@ -405,6 +455,10 @@ export async function getMintedWallets(): Promise<MintedWallet[]> {
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return [];
+      }
       const data = await fs.readFile(path.join(dataDir, 'minted-wallets.json'), 'utf-8');
       return JSON.parse(data);
     } catch (error) {
@@ -434,6 +488,10 @@ export async function saveMintedWallets(wallets: MintedWallet[]): Promise<boolea
     }
   } else {
     try {
+      if (!fs) {
+        console.error('fs module not available');
+        return false;
+      }
       await ensureDataDir();
       await fs.writeFile(
         path.join(dataDir, 'minted-wallets.json'),
