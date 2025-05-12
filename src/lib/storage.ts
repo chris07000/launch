@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 // Use /tmp in production (Vercel) and data directory locally
-const BASE_DIR = process.env.VERCEL
-  ? '/tmp/data'
+const BASE_DIR = process.env.VERCEL 
+  ? '/tmp'
   : path.join(process.cwd(), 'data');
 
 // Ensure the base directory exists
@@ -11,25 +11,25 @@ if (!fs.existsSync(BASE_DIR)) {
   fs.mkdirSync(BASE_DIR, { recursive: true });
 }
 
-// On startup in production, copy data files from the repository to /tmp
+// Copy initial data from repository to /tmp in production
 if (process.env.VERCEL) {
   const sourceDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(sourceDir)) {
-    const files = fs.readdirSync(sourceDir);
-    files.forEach(file => {
-      if (file.endsWith('.json')) {
-        const sourcePath = path.join(sourceDir, file);
-        const targetPath = path.join(BASE_DIR, file);
-        try {
+    try {
+      const files = fs.readdirSync(sourceDir);
+      files.forEach(file => {
+        if (file.endsWith('.json')) {
+          const sourcePath = path.join(sourceDir, file);
+          const targetPath = path.join(BASE_DIR, file);
           if (!fs.existsSync(targetPath)) {
             fs.copyFileSync(sourcePath, targetPath);
             console.log(`Copied ${file} to /tmp`);
           }
-        } catch (error) {
-          console.error(`Error copying ${file}:`, error);
         }
-      }
-    });
+      });
+    } catch (error) {
+      console.error('Error copying initial data:', error);
+    }
   }
 }
 
@@ -64,12 +64,6 @@ export function readJsonFile<T>(filePath: string, defaultValue: T): T {
 // Generic write function
 export function writeJsonFile<T>(filePath: string, data: T): boolean {
   try {
-    // Ensure the directory exists
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     console.log(`Successfully wrote to ${filePath}`);
     return true;
