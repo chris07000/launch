@@ -1,0 +1,278 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold: #ffd700;
+  --gold-dark: #aa8e00;
+  --gold-light: #ffef9c;
+  --bg-dark: #000000;
+  --text-light: #ffffff;
+}
+
+body {
+  color: var(--text-light);
+  background-color: var(--bg-dark);
+  overflow-x: hidden;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.pixel-grid-bg {
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.94)),
+    linear-gradient(90deg, rgba(255, 215, 0, 0.07) 1px, transparent 1px),
+    linear-gradient(rgba(255, 215, 0, 0.07) 1px, transparent 1px);
+  background-size: 100% 100%, 20px 20px, 20px 20px;
+}
+
+/* Style pixel button effect */
+.pixel-button {
+  background-color: var(--gold);
+  color: black;
+  border-width: 4px;
+  border-style: solid;
+  border-top-color: var(--gold);
+  border-left-color: var(--gold);
+  border-right-color: var(--gold-dark);
+  border-bottom-color: var(--gold-dark);
+  text-transform: uppercase;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.pixel-button:hover {
+  background-color: var(--gold-light);
+}
+
+.pixel-button:active {
+  border-top-color: var(--gold-dark);
+  border-left-color: var(--gold-dark);
+  border-right-color: var(--gold);
+  border-bottom-color: var(--gold);
+  transform: translateY(2px);
+}
+
+/* Image pixelated rendering */
+.pixelated {
+  image-rendering: pixelated;
+}
+
+/* Pulse animation for glowing effects */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
+  }
+}
+
+/* Tiger logo glow effect on hover */
+.tiger-logo-container {
+  transition: transform 0.3s ease;
+}
+
+.tiger-logo-container:hover {
+  transform: scale(1.05);
+}
+
+.tiger-logo-container:hover img {
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.7));
+}
+
+/* Responsive padding adjustments */
+@media (max-width: 640px) {
+  .responsive-container {
+    padding: 0.75rem !important;
+  }
+  
+  .responsive-padding {
+    padding: 0.5rem !important;
+  }
+  
+  .responsive-margin {
+    margin-bottom: 0.75rem !important;
+  }
+}
+
+/* Animations for attention-grabbing elements */
+@keyframes shine {
+  0% {
+    background-position: -100% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shine-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine-effect::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 215, 0, 0.4) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shine 3s infinite linear;
+  pointer-events: none;
+}
+
+@layer components {
+  .pixel-border {
+    @apply relative;
+    box-shadow: 
+      0px 0px 0px 3px #000,
+      inset 0px 0px 0px 3px #000;
+  }
+  
+  .pixel-border-gold {
+    @apply relative border-4 border-t-[#ffd700] border-l-[#ffd700] border-r-[#aa8e00] border-b-[#aa8e00];
+    box-shadow: 
+      inset 0px 0px 0px 1px rgba(0,0,0,0.5);
+  }
+  
+  .pixel-button-lg {
+    @apply relative bg-[#222] text-[#ffd700] px-6 py-3 transition-all duration-100
+    border-t-[4px] border-l-[4px] border-b-[4px] border-r-[4px] 
+    border-t-[#ffd700] border-l-[#ffd700] border-r-[#aa8e00] border-b-[#aa8e00]
+    text-lg font-bold;
+    box-shadow: 0px 4px 0px #6b5900;
+    text-shadow: 2px 2px 0px #000;
+  }
+  
+  .pixel-button:hover, .pixel-button-lg:hover {
+    @apply bg-[#333];
+    transform: translateY(1px);
+    box-shadow: 0px 3px 0px #6b5900;
+  }
+  
+  .pixel-box {
+    @apply bg-[#0d1320] p-4 border-t-[4px] border-l-[4px] border-b-[4px] border-r-[4px] 
+    border-t-[#ffd700] border-l-[#ffd700] border-r-[#aa8e00] border-b-[#aa8e00];
+  }
+  
+  .pixel-box-inner {
+    @apply border-[2px] border-[#333] bg-[#060c16] p-3 rounded-none;
+  }
+  
+  .pixel-text {
+    text-shadow: 2px 2px 0px #000;
+  }
+  
+  .shine {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to bottom right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(45deg);
+    animation: shine 3s infinite;
+  }
+  
+  @keyframes shine {
+    0% {
+      transform: translateX(-100%) rotate(45deg);
+    }
+    20%, 100% {
+      transform: translateX(100%) rotate(45deg);
+    }
+  }
+  
+  .pixel-corners {
+    clip-path: 
+      polygon(
+        0 4px, 4px 0, calc(100% - 4px) 0, 100% 4px,
+        100% calc(100% - 4px), calc(100% - 4px) 100%,
+        4px 100%, 0 calc(100% - 4px)
+      );
+  }
+
+  .pixel-stat {
+    @apply bg-black/50 border-2 border-[#ffd700] p-3 text-center;
+    box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  }
+  
+  .pixel-social-icon {
+    @apply bg-black/30 text-[#ffd700] border-2 border-[#ffd700] p-2 transition-all duration-150;
+    box-shadow: 2px 2px 0 #000;
+  }
+  
+  .pixel-social-icon:hover {
+    @apply bg-[#ffd700] text-black border-[#ffd700];
+    transform: translateY(-2px);
+  }
+  
+  /* Pixel art spinner for loading state */
+  .pixel-spinner {
+    width: 24px;
+    height: 24px;
+    background-color: var(--gold);
+    position: relative;
+    animation: pixel-spinner 1s infinite;
+  }
+  
+  @keyframes pixel-spinner {
+    0% { transform: scale(0.8); background-color: var(--gold); }
+    50% { transform: scale(1.2); background-color: #fff; }
+    100% { transform: scale(0.8); background-color: var(--gold); }
+  }
+  
+  /* Pixel bounce animation */
+  .pixel-bounce {
+    animation: pixel-bounce 2s infinite;
+  }
+  
+  @keyframes pixel-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  /* Pixel pulse animation */
+  .pixel-pulse {
+    animation: pixel-pulse 2s infinite;
+  }
+  
+  @keyframes pixel-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+  }
+  
+  /* Glowing effect */
+  .pixel-glow {
+    box-shadow: 0 0 5px var(--gold), 0 0 10px var(--gold);
+  }
+  
+  .text-glow {
+    text-shadow: 0 0 5px var(--gold), 0 0 10px var(--gold);
+  }
+} 
