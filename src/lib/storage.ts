@@ -134,4 +134,44 @@ export function getSoldOutTimes(): Record<number, number> {
 
 export function saveSoldOutTimes(times: Record<number, number>): boolean {
   return writeJsonFile(SOLD_OUT_TIMES_FILE, times);
+}
+
+/**
+ * Admin functie: Synchroniseer alle orders met batches
+ * Deze functie doorloopt alle orders en update de geminte wallets in batches.json
+ */
+export function syncOrdersToBatches(adminPassword: string): boolean {
+  try {
+    // Get current orders and batches
+    const existingOrders = getOrders();
+    const batches = getBatches();
+    
+    // Reset batch counters
+    batches.forEach((batch: Batch) => {
+      batch.mintedWallets = 0;
+      batch.isSoldOut = false;
+    });
+    
+    // Count orders per batch
+    Object.values(existingOrders).forEach(order => {
+      if (order.status === 'paid' || order.status === 'completed') {
+        const batch = batches.find((b: Batch) => b.id === order.batchId);
+        if (batch) {
+          batch.mintedWallets += order.quantity;
+          batch.isSoldOut = batch.mintedWallets >= batch.maxWallets;
+        }
+      }
+    });
+    
+    // Save updated batches
+    const saved = saveBatches(batches);
+    if (!saved) {
+      throw new Error('Failed to save batches');
+    }
+    
+    return true;
+  } catch (error: any) {
+    console.error('Error syncing orders to batches:', error);
+    return false;
+  }
 } 

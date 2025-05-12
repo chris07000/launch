@@ -881,47 +881,15 @@ export function getInscriptionForOrder(orderId: string): Inscription | null {
 }
 
 /**
- * Admin functie: Synchroniseer alle orders met batches
- * Deze functie doorloopt alle orders en update de geminte wallets in batches.json
+ * Update de batch status na een succesvolle mint
  */
-export function syncOrdersToBatches(adminPassword: string): boolean {
-  try {
-    // Validate admin password
-    if (!validateAdminPassword(adminPassword)) {
-      throw new Error('Invalid admin password');
-    }
-    
-    // Get current orders and batches
-    const existingOrders = getOrders();
-    const batches = getBatches();
-    
-    // Reset batch counters
-    batches.forEach((batch: Batch) => {
-      batch.mintedWallets = 0;
-      batch.isSoldOut = false;
-    });
-    
-    // Count orders per batch
-    Object.values(existingOrders).forEach(order => {
-      if (order.status === 'paid' || order.status === 'completed') {
-        const batch = batches.find((b: Batch) => b.id === order.batchId);
-        if (batch) {
-          batch.mintedWallets += order.quantity;
-          batch.isSoldOut = batch.mintedWallets >= batch.maxWallets;
-        }
-      }
-    });
-    
-    // Save updated batches
-    const saved = saveBatches(batches);
-    if (!saved) {
-      throw new Error('Failed to save batches');
-    }
-    
-    return true;
-  } catch (error: any) {
-    console.error('Error syncing orders to batches:', error);
-    return false;
+export function updateBatchStatus(batchId: number) {
+  const batch = batchesConfig[batchId];
+  if (!batch) return;
+
+  // Check of de batch nu sold out is
+  if (batch.mintedWallets >= batch.maxWallets) {
+    markBatchAsSoldOut(batchId);
   }
 }
 
@@ -969,17 +937,4 @@ export function markTransactionAsUsed(txid: string, orderId: string, amount: num
   
   usedTransactions.push(transaction);
   saveUsedTransactions(usedTransactions);
-}
-
-/**
- * Update de batch status na een succesvolle mint
- */
-export function updateBatchStatus(batchId: number) {
-  const batch = batchesConfig[batchId];
-  if (!batch) return;
-
-  // Check of de batch nu sold out is
-  if (batch.mintedWallets >= batch.maxWallets) {
-    markBatchAsSoldOut(batchId);
-  }
 } 
