@@ -1,7 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 
-export async function syncOrdersToBatches(password) {
+interface Order {
+  status: string;
+  btcAddress: string;
+  batchId: number;
+}
+
+interface Batch {
+  id: number;
+  mintedWallets: number;
+  maxWallets: number;
+  isSoldOut: boolean;
+}
+
+export async function syncOrdersToBatches(password: string): Promise<boolean> {
   if (!password || password !== process.env.ADMIN_PASSWORD) {
     throw new Error('Invalid password');
   }
@@ -11,9 +24,9 @@ export async function syncOrdersToBatches(password) {
     const batchesFile = path.join(process.cwd(), 'data/batches.json');
     const mintedWalletsFile = path.join(process.cwd(), 'data/minted-wallets.json');
 
-    let orders = {};
-    let batches = [];
-    let mintedWallets = [];
+    let orders: Record<string, Order> = {};
+    let batches: Batch[] = [];
+    let mintedWallets: string[] = [];
 
     if (fs.existsSync(ordersFile)) {
       const ordersData = fs.readFileSync(ordersFile, 'utf8');

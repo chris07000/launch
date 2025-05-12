@@ -1,5 +1,5 @@
 import { updateOrderStatus } from '../../app/admin/actions';
-import { syncOrdersToBatches } from '../../app/api/admin/route';
+import { syncOrdersToBatches } from '../../app/api/admin/utils';
 
 interface Transaction {
   vout: {
