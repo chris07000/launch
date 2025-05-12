@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrderStatus, updateOrderStatus, isTransactionUsed, markTransactionAsUsed } from '@/api/mint';
+import { syncOrdersToBatches } from '@/lib/storage';
 
 // Add type definition at the top of the file
 interface OrderStatus {
@@ -179,6 +180,9 @@ export async function POST(request: NextRequest) {
       // Update order status to paid
       await updateOrderStatus(orderId, 'paid');
       
+      // Sync orders with batches
+      await syncOrdersToBatches(process.env.ADMIN_PASSWORD || '');
+      
       // Start inscription process in the background
       startInscriptionProcess(orderId).catch(error => {
         console.error('Error in background inscription process:', error);
@@ -199,10 +203,10 @@ export async function POST(request: NextRequest) {
       message: 'Payment not yet verified',
       orderId
     });
-  } catch (error: any) {
-    console.error('Payment verification error:', error);
+  } catch (error) {
+    console.error('Error in payment verification:', error);
     return NextResponse.json(
-      { error: error.message || 'Payment verification failed', verified: false },
+      { error: 'Something went wrong', verified: false },
       { status: 500 }
     );
   }

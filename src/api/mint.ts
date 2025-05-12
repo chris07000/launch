@@ -9,6 +9,7 @@ import {
   Order,
   Batch 
 } from '@/lib/storage';
+import { Order as OrderType } from '@/lib/types';
 
 // Batches configuratie
 interface BatchConfig {
@@ -30,6 +31,51 @@ interface Inscription {
   assignedToOrder?: string; // Order ID if assigned
 }
 
+// Constants for file paths
+const ORDERS_FILE = '/tmp/orders.json';
+const USED_TRANSACTIONS_FILE = '/tmp/used-transactions.json';
+
+interface UsedTransaction {
+  orderId: string;
+  amount: number;
+  timestamp: string;
+}
+
+// Helper function to ensure directory exists
+function ensureDirectoryExists(filePath: string) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+// Helper function to read JSON file
+function readJsonFile<T>(filePath: string): T | null {
+  try {
+    ensureDirectoryExists(filePath);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data || '{}');
+  } catch (error) {
+    console.error(`Error reading ${filePath}:`, error);
+    return null;
+  }
+}
+
+// Helper function to write JSON file
+function writeJsonFile<T>(filePath: string, data: T): boolean {
+  try {
+    ensureDirectoryExists(filePath);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error(`Error writing ${filePath}:`, error);
+    return false;
+  }
+}
+
 // File path for persisting inscriptions
 const INSCRIPTIONS_FILE_PATH = path.join(process.cwd(), 'data', 'inscriptions.json');
 
@@ -42,9 +88,6 @@ interface WhitelistEntry {
   batchId: number; // The batch this address is whitelisted for
   createdAt?: string; // Optional timestamp
 }
-
-// File path voor gebruikte transacties
-const USED_TRANSACTIONS_FILE_PATH = path.join(process.cwd(), 'data', 'used-transactions.json');
 
 // Het BTC adres waar alle betalingen naartoe gaan (project wallet)
 const PROJECT_BTC_ADDRESS = process.env.PROJECT_BTC_WALLET || 'bc1p9rf34vgvaz2rswpqh7d0zdvghzqreglp8qzk9eun3fscyj6pm5kqk96605';
@@ -121,11 +164,11 @@ const loadUsedTransactions = (): UsedTransaction[] => {
     }
     
     // Check if file exists
-    if (!fs.existsSync(USED_TRANSACTIONS_FILE_PATH)) {
+    if (!fs.existsSync(USED_TRANSACTIONS_FILE)) {
       return [];
     }
     
-    const data = fs.readFileSync(USED_TRANSACTIONS_FILE_PATH, 'utf8');
+    const data = fs.readFileSync(USED_TRANSACTIONS_FILE, 'utf8');
     const parsed = JSON.parse(data);
     
     // Convert date strings back to Date objects
@@ -148,7 +191,7 @@ const saveUsedTransactions = (transactions: UsedTransaction[]): void => {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     
-    fs.writeFileSync(USED_TRANSACTIONS_FILE_PATH, JSON.stringify(transactions, null, 2));
+    fs.writeFileSync(USED_TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2));
   } catch (error) {
     console.error('Error saving used transactions:', error);
   }
@@ -656,60 +699,45 @@ export async function createMintOrder(
 /**
  * API handler voor het ophalen van een order status
  */
-export async function getOrderStatus(orderId: string) {
-  try {
-    // Get current orders
-    const existingOrders = getOrders();
-    
-    // Check if order exists
-    if (!existingOrders[orderId]) {
-      throw new Error(`Order not found with ID: ${orderId}`);
-    }
-    
-    // Return order status
-    return existingOrders[orderId];
-  } catch (error: any) {
-    console.error(`Error getting order status for ${orderId}:`, error);
-    throw error;
+export function getOrderStatus(orderId: string): Order {
+  console.log(`Looking for order with ID: ${orderId}`);
+  
+  const orders = readJsonFile<{ [key: string]: Order }>(ORDERS_FILE);
+  if (!orders) {
+    throw new Error('Could not read orders file');
   }
+  
+  console.log(`Available orders: ${Object.keys(orders).length}`);
+  
+  const order = orders[orderId];
+  if (!order) {
+    throw new Error(`Order ${orderId} not found`);
+  }
+  
+  console.log(`Found order ${orderId}:`, order);
+  return order;
 }
 
 /**
  * API handler voor het updaten van een order status
  * (In een echte implementatie zou dit automatisch gebeuren via webhooks of een payment processor)
  */
-export async function updateOrderStatus(
-  orderId: string,
-  status: 'pending' | 'paid' | 'completed' | 'failed'
-) {
-  try {
-    // Get current orders
-    const existingOrders = getOrders();
-    
-    // Check if order exists
-    if (!existingOrders[orderId]) {
-      throw new Error(`Order not found with ID: ${orderId}`);
-    }
-    
-    // Update order status
-    const order = existingOrders[orderId];
-    order.status = status;
-    order.updatedAt = new Date();
-    
-    // Save updated order
-    existingOrders[orderId] = order;
-    orders[orderId] = order; // Update in-memory storage
-    
-    const saved = saveOrders(existingOrders);
-    if (!saved) {
-      throw new Error('Failed to save order status');
-    }
-    
-    return order;
-  } catch (error: any) {
-    console.error(`Error updating order status for ${orderId}:`, error);
-    throw error;
+export function updateOrderStatus(orderId: string, status: Order['status']): boolean {
+  const orders = readJsonFile<{ [key: string]: Order }>(ORDERS_FILE);
+  if (!orders) {
+    console.error('Could not read orders file');
+    return false;
   }
+  
+  if (!orders[orderId]) {
+    console.error(`Order ${orderId} not found`);
+    return false;
+  }
+  
+  orders[orderId].status = status;
+  orders[orderId].updatedAt = new Date().toISOString();
+  
+  return writeJsonFile(ORDERS_FILE, orders);
 }
 
 /**
@@ -913,28 +941,21 @@ const defaultBatches: Batch[] = [
   { id: 16, price: 450.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
 ];
 
-// Interface voor gebruikte transacties
-interface UsedTransaction {
-  txid: string;
-  orderId: string;
-  amount: number;
-  timestamp: Date;
-}
-
 // Check if a transaction has been used
-export function isTransactionUsed(txid: string): boolean {
-  return usedTransactions.some(tx => tx.txid === txid);
+export function isTransactionUsed(txId: string): boolean {
+  const usedTransactions = readJsonFile<{ [key: string]: UsedTransaction }>(USED_TRANSACTIONS_FILE) || {};
+  return !!usedTransactions[txId];
 }
 
 // Mark a transaction as used
-export function markTransactionAsUsed(txid: string, orderId: string, amount: number): void {
-  const transaction: UsedTransaction = {
-    txid,
+export function markTransactionAsUsed(txId: string, orderId: string, amount: number): boolean {
+  const usedTransactions = readJsonFile<{ [key: string]: UsedTransaction }>(USED_TRANSACTIONS_FILE) || {};
+  
+  usedTransactions[txId] = {
     orderId,
     amount,
-    timestamp: new Date()
+    timestamp: new Date().toISOString()
   };
   
-  usedTransactions.push(transaction);
-  saveUsedTransactions(usedTransactions);
+  return writeJsonFile(USED_TRANSACTIONS_FILE, usedTransactions);
 } 
