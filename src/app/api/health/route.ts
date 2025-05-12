@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +19,7 @@ export async function GET() {
     // Get memory usage
     const memoryUsage = process.memoryUsage();
 
-    return NextResponse.json({
+    return new Response(JSON.stringify({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       environment: isVercel ? 'vercel' : 'local',
@@ -30,18 +29,23 @@ export async function GET() {
         heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + 'MB',
         rss: Math.round(memoryUsage.rss / 1024 / 1024) + 'MB'
       }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Health check failed:', error);
-    return NextResponse.json(
+    return new Response(JSON.stringify(
       {
         status: 'unhealthy',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString(),
         environment: isVercel ? 'vercel' : 'local',
         checks
-      },
-      { status: 500 }
-    );
+      }
+    ), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 

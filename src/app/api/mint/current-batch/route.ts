@@ -1,62 +1,65 @@
-import { NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs/promises';
-import { loadWhitelist } from '../utils';
-import * as storage from '@/lib/storage-wrapper';
+import { NextRequest, NextResponse } from 'next/server';
+import { sql } from '@vercel/postgres';
+import * as storage from '@/lib/storage-wrapper-db-only';
 
-// For backward compatibility
-const CURRENT_BATCH_FILE = path.join(process.cwd(), 'data', 'current-batch.json');
-const COOLDOWN_FILE_PATH = path.join(process.cwd(), 'data', 'batch-cooldown.json');
+export const dynamic = 'force-dynamic';
 
-async function getCooldownMinutes(): Promise<number> {
-  try {
-    const isVercel = process.env.VERCEL === '1';
-    
-    if (isVercel) {
-      // In production, use fixed cooldown
-      return 15;
-    } else {
-      // In local dev, read from file
-      const data = await fs.readFile(COOLDOWN_FILE_PATH, 'utf-8');
-      const cooldown = JSON.parse(data);
-      return cooldown.value || 15;
-    }
-  } catch (error) {
-    return 15; // Default cooldown time
-  }
+interface CurrentBatchResponse {
+  currentBatch: number;
+  price: number;
+  available: number;
+  maxWallets: number;
+  soldOut: boolean;
 }
 
 export async function GET() {
   try {
-    // Get current batch from storage wrapper
+    // Get current batch ID
     const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
-
-    // If batch is marked as sold out, check if cooldown period has passed
-    if (soldOutAt) {
-      const cooldownMinutes = await getCooldownMinutes();
-      const cooldownMs = cooldownMinutes * 60 * 1000;
-      const now = Date.now();
-      
-      // If cooldown period has passed, increment batch and clear sold out status
-      if (now - soldOutAt >= cooldownMs) {
-        const newBatch = currentBatch + 1;
-        await storage.saveCurrentBatch({ 
-          currentBatch: newBatch,
-          soldOutAt: null 
-        });
-        
-        return NextResponse.json({ currentBatch: newBatch });
-      }
-      
-      // If still in cooldown, return current status
-      return NextResponse.json({ currentBatch, soldOutAt });
+    
+    // Get all batches
+    const batches = await storage.getBatches();
+    
+    // Find current batch details
+    const currentBatchInfo = batches.find(b => b.id === currentBatch);
+    
+    if (!currentBatchInfo) {
+      return NextResponse.json({
+        error: `Current batch #${currentBatch} not found`
+      }, { status: 404 });
     }
-
-    // If not sold out, just return current batch
-    return NextResponse.json({ currentBatch });
+    
+    const response: CurrentBatchResponse = {
+      currentBatch: currentBatchInfo.id,
+      price: currentBatchInfo.price,
+      available: currentBatchInfo.maxWallets - currentBatchInfo.mintedWallets,
+      maxWallets: currentBatchInfo.maxWallets,
+      soldOut: currentBatchInfo.isSoldOut
+    };
+    
+    if (soldOutAt) {
+      // Calculate timeLeft based on 15-minute cooldown
+      const now = Date.now();
+      const cooldownEnd = soldOutAt + 15 * 60 * 1000; // 15 minutes
+      const timeLeft = Math.max(0, cooldownEnd - now);
+      
+      return NextResponse.json({
+        ...response,
+        soldOut: true,
+        soldOutAt,
+        cooldownEnd,
+        timeLeft,
+        nextBatch: currentBatch + 1
+      });
+    }
+    
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Error getting current batch:', error);
-    return NextResponse.json({ currentBatch: 1 });
+    console.error('Error fetching current batch:', error);
+    return NextResponse.json({ 
+      error: 'Failed to fetch current batch',
+      message: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 }
 

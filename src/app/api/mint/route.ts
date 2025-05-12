@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import * as storage from '@/lib/storage-wrapper';
+import { NextRequest } from 'next/server';
+import * as storage from '@/lib/storage-wrapper-db-only';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,20 +84,26 @@ export async function GET(request: NextRequest) {
     if (batchId) {
       // Specifieke batch informatie ophalen
       const batchInfo = await getBatchInfo(parseInt(batchId, 10));
-      return NextResponse.json(batchInfo);
+      return new Response(JSON.stringify(batchInfo), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     } else {
       // Alle batches ophalen
       const allBatches = await getAllBatches();
-      return NextResponse.json(allBatches);
+      return new Response(JSON.stringify(allBatches), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   } catch (error: any) {
     // Error handling
     const errorMessage = error.message || 'Something went wrong';
     console.error('GET /api/mint error:', errorMessage);
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 400 }
-    );
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
@@ -108,19 +114,31 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!btcAddress) {
-      return NextResponse.json({ error: 'BTC address is required' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'BTC address is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (!quantity || quantity < 1) {
-      return NextResponse.json({ error: 'Quantity must be at least 1' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'Quantity must be at least 1' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Create mint order
     const order = await createMintOrder(btcAddress, quantity, batchId);
 
-    return NextResponse.json(order);
+    return new Response(JSON.stringify(order), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error: any) {
     console.error('Error creating mint order:', error);
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 

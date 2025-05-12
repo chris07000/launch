@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import * as storage from '@/lib/storage-wrapper';
+import * as storage from '@/lib/storage-wrapper-db-only';
 import { Batch, WhitelistEntry } from '@/lib/types';
 
 // Define default batches
@@ -37,7 +36,10 @@ export async function GET(request: Request) {
     const action = searchParams.get('action');
     
     if (!password || password !== process.env.ADMIN_PASSWORD) {
-      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+      return new Response(JSON.stringify({ error: 'Invalid password' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Dashboard action
@@ -62,16 +64,22 @@ export async function GET(request: Request) {
         });
 
         // Return dashboard data
-        return NextResponse.json({
+        return new Response(JSON.stringify({
           whitelistedAddresses,
           batches: batchesWithAvailability,
           currentBatch: currentBatchInfo.currentBatch,
           orders,
           mintedWallets
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
         });
       } catch (error: any) {
         console.error('Dashboard error:', error);
-        return NextResponse.json({ error: 'Error loading dashboard data.' }, { status: 500 });
+        return new Response(JSON.stringify({ error: 'Error loading dashboard data.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 
@@ -80,17 +88,29 @@ export async function GET(request: Request) {
       try {
         // In a real implementation, you would fetch inscriptions from database
         // For now, we'll return an empty array
-        return NextResponse.json({ inscriptions: [] });
+        return new Response(JSON.stringify({ inscriptions: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
       } catch (error: any) {
         console.error('Inscriptions error:', error);
-        return NextResponse.json({ error: 'Error loading inscriptions.' }, { status: 500 });
+        return new Response(JSON.stringify({ error: 'Error loading inscriptions.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    return new Response(JSON.stringify({ error: 'Invalid action' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error: any) {
     console.error('Error in admin GET:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
@@ -101,7 +121,10 @@ export async function POST(request: Request) {
     const { action, password, address, batchId, inscriptionId, orderId, btcAddress, quantity } = data;
     
     if (!password || password !== process.env.ADMIN_PASSWORD) {
-      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+      return new Response(JSON.stringify({ error: 'Invalid password' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Handle different actions
@@ -111,18 +134,27 @@ export async function POST(request: Request) {
       // Validate the address
       if (!address) {
         console.log('Address is missing');
-        return NextResponse.json({ error: 'Address is required' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Address is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       if (!isValidOrdinalAddress(address)) {
         console.log('Invalid ordinal address:', address);
-        return NextResponse.json({ error: 'Invalid Ordinal address (must start with bc1p...)' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Invalid Ordinal address (must start with bc1p...)' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       // Check if batch is valid
       if (!batchId) {
         console.log('Batch ID is missing');
-        return NextResponse.json({ error: 'Batch ID is required' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Batch ID is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
 
       try {
@@ -148,19 +180,28 @@ export async function POST(request: Request) {
         // Save whitelist
         await storage.saveWhitelist(whitelist);
         
-        return NextResponse.json({ 
+        return new Response(JSON.stringify({ 
           success: true, 
           message: existingIndex !== -1 ? 'Address already in whitelist, batch updated' : 'Address added to whitelist' 
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
         });
       } catch (error: any) {
         console.error('Error adding to whitelist:', error);
-        return NextResponse.json({ error: 'Failed to update whitelist' }, { status: 500 });
+        return new Response(JSON.stringify({ error: 'Failed to update whitelist' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
     else if (action === 'removeFromWhitelist') {
       // Validate the address
       if (!address) {
-        return NextResponse.json({ error: 'Address is required' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Address is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       try {
@@ -173,24 +214,39 @@ export async function POST(request: Request) {
         // Save whitelist
         await storage.saveWhitelist(updatedWhitelist);
         
-        return NextResponse.json({ success: true });
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
       } catch (error: any) {
         console.error('Error removing from whitelist:', error);
-        return NextResponse.json({ error: 'Failed to update whitelist' }, { status: 500 });
+        return new Response(JSON.stringify({ error: 'Failed to update whitelist' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
     else if (action === 'addOrder') {
       // Validate inputs
       if (!btcAddress) {
-        return NextResponse.json({ error: 'Bitcoin address is required' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Bitcoin address is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       if (!isValidOrdinalAddress(btcAddress)) {
-        return NextResponse.json({ error: 'Invalid Ordinal address (must start with bc1p...)' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Invalid Ordinal address (must start with bc1p...)' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       if (!quantity || quantity <= 0 || quantity > 2) {
-        return NextResponse.json({ error: 'Quantity must be between 1 and 2' }, { status: 400 });
+        return new Response(JSON.stringify({ error: 'Quantity must be between 1 and 2' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       const actualBatchId = batchId || 1;
@@ -202,7 +258,10 @@ export async function POST(request: Request) {
         // Find the batch
         const batchIndex = batches.findIndex(b => b.id === actualBatchId);
         if (batchIndex === -1) {
-          return NextResponse.json({ error: `Batch ${actualBatchId} does not exist` }, { status: 400 });
+          return new Response(JSON.stringify({ error: `Batch ${actualBatchId} does not exist` }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
         
         // Get the batch price
@@ -252,14 +311,20 @@ export async function POST(request: Request) {
         batches[batchIndex].mintedWallets += 1;
         await storage.saveBatches(batches);
         
-        return NextResponse.json({ 
+        return new Response(JSON.stringify({ 
           success: true, 
           message: `Order added and minted wallet registered for batch ${actualBatchId}`,
           orderId: newOrder.id
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
         });
       } catch (error: any) {
         console.error('Error adding order:', error);
-        return NextResponse.json({ error: 'Failed to add order' }, { status: 500 });
+        return new Response(JSON.stringify({ error: 'Failed to add order' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
     else if (action === 'reset') {
@@ -279,19 +344,31 @@ export async function POST(request: Request) {
         // Reset current batch
         await storage.saveCurrentBatch({ currentBatch: 1, soldOutAt: null });
         
-        return NextResponse.json({ 
+        return new Response(JSON.stringify({ 
           success: true, 
           message: 'All data has been reset successfully' 
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
         });
       } catch (error: any) {
         console.error('Error resetting data:', error);
-        return NextResponse.json({ error: 'Failed to reset data' }, { status: 500 });
+        return new Response(JSON.stringify({ error: 'Failed to reset data' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    return new Response(JSON.stringify({ error: 'Invalid action' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error: any) {
     console.error('Error in admin POST:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 
