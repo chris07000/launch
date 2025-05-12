@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrderStatus, updateOrderStatus, isTransactionUsed, markTransactionAsUsed } from '@/api/mint';
-import { syncOrdersToBatches } from '@/lib/storage';
+import { sql } from '@vercel/postgres';
+
+export const dynamic = 'force-dynamic';
 
 // Add type definition at the top of the file
 interface OrderStatus {
@@ -82,7 +84,8 @@ async function checkBitcoinPayment(
     
     for (const tx of transactions) {
       // Skip if transaction is already used
-      if (isTransactionUsed(tx.txid)) {
+      const isUsed = await isTransactionUsed(tx.txid);
+      if (isUsed) {
         console.log(`Skipping already used transaction ${tx.txid}`);
         continue;
       }
@@ -108,7 +111,7 @@ async function checkBitcoinPayment(
       
       // Als deze transactie een betaling bevat, markeer als gebruikt
       if (txAmount > 0) {
-        markTransactionAsUsed(tx.txid, orderId, txAmount);
+        await markTransactionAsUsed(tx.txid, orderId, txAmount);
         totalReceivedSats += txAmount;
       }
     }
@@ -180,8 +183,12 @@ export async function POST(request: NextRequest) {
       // Update order status to paid
       await updateOrderStatus(orderId, 'paid');
       
-      // Sync orders with batches
-      await syncOrdersToBatches(process.env.ADMIN_PASSWORD || '');
+      // Update batch minted_wallets count
+      await sql`
+        UPDATE batches 
+        SET minted_wallets = minted_wallets + 1 
+        WHERE id = ${orderStatus.batchId}
+      `;
       
       // Start inscription process in the background
       startInscriptionProcess(orderId).catch(error => {
@@ -196,18 +203,85 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Payment not yet verified
+    // Payment not verified yet
     return NextResponse.json({
       verified: false,
       status: orderStatus.status,
-      message: 'Payment not yet verified',
+      message: 'Payment not detected yet',
       orderId
     });
-  } catch (error) {
-    console.error('Error in payment verification:', error);
+  } catch (error: any) {
+    console.error('Error verifying payment:', error);
     return NextResponse.json(
-      { error: 'Something went wrong', verified: false },
+      { error: error.message || 'Failed to verify payment' },
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const reference = searchParams.get('reference');
+
+    if (!reference) {
+      return NextResponse.json({ error: 'Payment reference is required' }, { status: 400 });
+    }
+
+    // Get the order from the database
+    const { rows } = await sql`
+      SELECT * FROM orders WHERE payment_reference = ${reference}
+    `;
+
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    const order = rows[0];
+
+    // Check if payment is already marked as completed
+    if (order.status === 'completed') {
+      return NextResponse.json({ status: 'completed' });
+    }
+
+    // Check payment status
+    const paymentResult = await checkPayment(reference);
+    
+    if (paymentResult.confirmed) {
+      // Update order status
+      await sql`
+        UPDATE orders 
+        SET status = 'completed', updated_at = CURRENT_TIMESTAMP 
+        WHERE payment_reference = ${reference}
+      `;
+
+      // Update batch minted_wallets count
+      await sql`
+        UPDATE batches 
+        SET minted_wallets = minted_wallets + 1 
+        WHERE id = ${order.batch_id}
+      `;
+
+      // Add to minted_wallets table
+      await sql`
+        INSERT INTO minted_wallets (address, batch_id, quantity)
+        VALUES (${order.btc_address}, ${order.batch_id}, ${order.quantity})
+        ON CONFLICT (address, batch_id) 
+        DO UPDATE SET quantity = minted_wallets.quantity + EXCLUDED.quantity
+      `;
+
+      return NextResponse.json({ status: 'completed' });
+    }
+
+    return NextResponse.json({ status: 'pending' });
+  } catch (error: any) {
+    console.error('Error verifying payment:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+async function checkPayment(reference: string): Promise<{ confirmed: boolean }> {
+  // TODO: Implement actual payment verification logic
+  // For now, just return confirmed: true
+  return { confirmed: true };
 } 
