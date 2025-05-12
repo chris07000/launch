@@ -3,13 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { writeFile } from 'fs/promises';
 
-// In Next.js App Router, we use a different approach for large files
-export const config = {
-  api: {
-    // Increase the limit for file uploads
-    responseLimit: '50mb',
-  },
-};
+// New config format for Next.js App Router
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 // Set up constants for paths
 const DATA_DIR = path.join(process.cwd(), 'data');
