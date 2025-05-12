@@ -26,10 +26,13 @@ export function ensureDirectoryExists(filePath: string) {
 // Helper function to read JSON file
 export function readJsonFile<T>(filePath: string): T | null {
   try {
+    console.log(`Reading file: ${filePath}`);
     if (!fs.existsSync(filePath)) {
+      console.log(`File does not exist: ${filePath}`);
       return null;
     }
     const data = fs.readFileSync(filePath, 'utf8');
+    console.log(`Raw data from ${filePath}:`, data);
     return JSON.parse(data);
   } catch (error) {
     console.error(`Error reading file ${filePath}:`, error);
@@ -40,8 +43,11 @@ export function readJsonFile<T>(filePath: string): T | null {
 // Helper function to write JSON file
 export function writeJsonFile<T>(filePath: string, data: T): boolean {
   try {
+    console.log(`Writing to file: ${filePath}`);
+    console.log('Data to write:', data);
     ensureDirectoryExists(filePath);
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    console.log(`Successfully wrote to ${filePath}`);
     return true;
   } catch (error) {
     console.error(`Error writing file ${filePath}:`, error);
@@ -51,22 +57,33 @@ export function writeJsonFile<T>(filePath: string, data: T): boolean {
 
 // Initialize orders file if it doesn't exist
 export function initializeOrdersFile() {
+  console.log('Initializing orders file');
   if (!fs.existsSync(ORDERS_FILE)) {
+    console.log(`Orders file does not exist: ${ORDERS_FILE}`);
     ensureDirectoryExists(ORDERS_FILE);
     writeJsonFile(ORDERS_FILE, []);
+    console.log('Created empty orders file');
+  } else {
+    console.log('Orders file already exists');
   }
 }
 
 // Get orders from file
 export function getOrders(): Order[] {
+  console.log('Getting orders');
   initializeOrdersFile();
-  return readJsonFile<Order[]>(ORDERS_FILE) || [];
+  const orders = readJsonFile<Order[]>(ORDERS_FILE) || [];
+  console.log('Retrieved orders:', orders);
+  return orders;
 }
 
 // Save orders to file
 export function saveOrders(orders: Order[]): boolean {
+  console.log('Saving orders:', orders);
   initializeOrdersFile();
-  return writeJsonFile(ORDERS_FILE, orders);
+  const result = writeJsonFile(ORDERS_FILE, orders);
+  console.log('Save result:', result);
+  return result;
 }
 
 // Get batches from file

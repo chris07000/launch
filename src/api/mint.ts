@@ -546,6 +546,7 @@ export async function createMintOrder(
   
   // Load existing orders using storage function
   const existingOrders = getOrders();
+  console.log('Existing orders:', existingOrders);
   
   // Validate the BTC address
   if (!isValidOrdinalAddress(btcAddress)) {
@@ -589,20 +590,29 @@ export async function createMintOrder(
     updatedAt: new Date().toISOString()
   };
   
+  console.log('New order created:', newOrder);
+  
   // Add order to arrays
   orders.push(newOrder);
   existingOrders.push(newOrder);
   
+  console.log('Orders after adding new order:', existingOrders);
+  
   // Save orders using storage function
   const saved = saveOrders(existingOrders);
+  console.log('Save result:', saved);
+  
   if (!saved) {
+    console.error('Failed to save orders');
     throw new Error('Failed to save order');
   }
   
-  console.log('Order created successfully:', newOrder);
+  // Verify orders were saved
+  const savedOrders = getOrders();
+  console.log('Orders after saving:', savedOrders);
   
   // Return order details
-  return {
+  const orderDetails = {
     orderId: orderId,
     btcAddress: PAYMENT_BTC_ADDRESS,
     paymentReference,
@@ -615,6 +625,9 @@ export async function createMintOrder(
     quantity: quantity,
     batchId: currentBatchId
   };
+  
+  console.log('Returning order details:', orderDetails);
+  return orderDetails;
 }
 
 /**
