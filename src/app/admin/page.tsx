@@ -1354,12 +1354,12 @@ export default function AdminPage() {
                     )}
                     
                     {/* Whitelist Tab */}
-                    {activeTab === 'whitelist' && dashboardData?.whitelistedAddresses && (
+                    {activeTab === 'whitelist' && (
                       <div>
                         <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ color: '#ffd700', fontSize: '14px' }}>WHITELIST BEHEER</div>
                           <div style={{ color: '#aaa', fontSize: '12px' }}>
-                            {dashboardData.whitelistedAddresses.length} Adressen
+                            {dashboardData?.whitelistedAddresses?.length || 0} Adressen
                           </div>
                         </div>
                         
@@ -1372,54 +1372,41 @@ export default function AdminPage() {
                         }}>
                           <div style={{ marginBottom: '12px', fontSize: '12px' }}>Nieuw adres toevoegen:</div>
                           
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <input 
-                              type="text"
-                              value={newAddress}
-                              onChange={(e) => setNewAddress(e.target.value)}
-                              placeholder="bc1p..."
-                              style={{
-                                width: '100%',
-                                padding: '8px',
-                                backgroundColor: 'black',
-                                border: '1px solid #555',
-                                color: 'white',
-                                fontSize: '12px',
-                                marginBottom: '8px'
-                              }}
-                            />
-                            
-                            {/* Batch selector */}
-                            <div style={{ marginBottom: '8px' }}>
-                              <label style={{ display: 'block', marginBottom: '4px', fontSize: '10px', color: '#aaa' }}>Selecteer batch:</label>
-                              <select 
-                                value={selectedBatch}
-                                onChange={(e) => setSelectedBatch(Number(e.target.value))}
-                                style={{
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                            <div style={{ flex: 1 }}>
+                              <input
+                                type="text"
+                                value={newAddress}
+                                onChange={(e) => setNewAddress(e.target.value)}
+                                placeholder="bc1p..."
+                                style={{ 
                                   width: '100%',
                                   padding: '8px',
-                                  backgroundColor: 'black',
-                                  border: '1px solid #555',
+                                  backgroundColor: '#111',
+                                  border: '1px solid #333',
+                                  color: 'white',
+                                  fontSize: '12px'
+                                }}
+                              />
+                            </div>
+                            
+                            <div>
+                              <select
+                                value={selectedBatch}
+                                onChange={(e) => setSelectedBatch(parseInt(e.target.value))}
+                                style={{ 
+                                  padding: '8px',
+                                  backgroundColor: '#111',
+                                  border: '1px solid #333',
                                   color: 'white',
                                   fontSize: '12px'
                                 }}
                               >
-                                {/* Generate options for all 16 batches */}
-                                {Array.from({ length: 16 }, (_, i) => i + 1).map(batchId => {
-                                  // Find batch info or calculate price based on 4.29% increase per batch
-                                  const batch = dashboardData?.batches?.find((b: any) => b.id === batchId) || { 
-                                    id: batchId, 
-                                    // Base price is 250, with approximately 4.29% increase per batch
-                                    price: parseFloat((250 * Math.pow(1.0429, batchId - 1)).toFixed(2)),
-                                    available: 0 
-                                  };
-                                  
-                                  return (
-                                    <option key={batch.id} value={batch.id}>
-                                      Batch #{batch.id} - ${batch.price?.toFixed(2)} - {batch.available} slots
-                                    </option>
-                                  );
-                                })}
+                                {Array.from({ length: 16 }, (_, i) => i + 1).map(batchId => (
+                                  <option key={batchId} value={batchId}>
+                                    Batch #{batchId}
+                                  </option>
+                                ))}
                               </select>
                             </div>
                             
@@ -1461,7 +1448,7 @@ export default function AdminPage() {
                           border: '1px solid #333',
                           padding: '16px'
                         }}>
-                          {dashboardData.whitelistedAddresses.length === 0 ? (
+                          {!dashboardData?.whitelistedAddresses || dashboardData.whitelistedAddresses.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '20px', color: '#aaa', fontSize: '12px' }}>
                               Geen adressen gevonden in de whitelist
                             </div>
@@ -1482,6 +1469,7 @@ export default function AdminPage() {
                                 <div>Kopieer</div>
                                 <div>Actie</div>
                               </div>
+                              
                               {dashboardData.whitelistedAddresses.map((entry: any, index: number) => (
                                 <div key={index} style={{ 
                                   display: 'grid',

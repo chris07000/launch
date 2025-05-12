@@ -1,0 +1,5 @@
+* 6504077 - Update backup system with proper Git configuration - Mon May 12 20:35:01 2025 +0200
+* b901be6 - Add automatic data backup system - Mon May 12 19:37:02 2025 +0200
+* afca318 - Revert to using data directory and add Vercel config - Mon May 12 19:32:19 2025 +0200
+* 64151e0 - Add centralized storage with /tmp support for Vercel - Mon May 12 19:28:03 2025 +0200
+* a84dc3c - Fix mint start time storage in Vercel by using /tmp directory - Mon May 12 19:25:30 2025 +0200

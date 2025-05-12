@@ -1,12 +1,36 @@
 import fs from 'fs';
 import path from 'path';
 
-// Always use the data directory, both locally and in production
-const BASE_DIR = path.join(process.cwd(), 'data');
+// Use /tmp in production (Vercel) and data directory locally
+const BASE_DIR = process.env.VERCEL
+  ? '/tmp/data'
+  : path.join(process.cwd(), 'data');
 
 // Ensure the base directory exists
 if (!fs.existsSync(BASE_DIR)) {
   fs.mkdirSync(BASE_DIR, { recursive: true });
+}
+
+// On startup in production, copy data files from the repository to /tmp
+if (process.env.VERCEL) {
+  const sourceDir = path.join(process.cwd(), 'data');
+  if (fs.existsSync(sourceDir)) {
+    const files = fs.readdirSync(sourceDir);
+    files.forEach(file => {
+      if (file.endsWith('.json')) {
+        const sourcePath = path.join(sourceDir, file);
+        const targetPath = path.join(BASE_DIR, file);
+        try {
+          if (!fs.existsSync(targetPath)) {
+            fs.copyFileSync(sourcePath, targetPath);
+            console.log(`Copied ${file} to /tmp`);
+          }
+        } catch (error) {
+          console.error(`Error copying ${file}:`, error);
+        }
+      }
+    });
+  }
 }
 
 // Define all data file paths
