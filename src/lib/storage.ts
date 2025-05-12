@@ -43,50 +43,41 @@ export interface MintedWallet {
   mintedAt: string;
 }
 
-// Get base directory based on environment
-const getBaseDir = () => {
-  // Use /tmp in production (Vercel), data directory in development
-  const baseDir = process.env.NODE_ENV === 'production' ? '/tmp' : path.join(process.cwd(), 'data');
-  
-  // Ensure directory exists
-  if (!fs.existsSync(baseDir)) {
-    fs.mkdirSync(baseDir, { recursive: true });
-  }
-  
-  return baseDir;
-};
-
 // File paths
-const getFilePath = (filename: string) => path.join(getBaseDir(), filename);
-
-const WHITELIST_FILE = 'whitelist.json';
-const BATCHES_FILE = 'batches.json';
-const ORDERS_FILE = 'orders.json';
-const MINTED_WALLETS_FILE = 'minted-wallets.json';
-const SOLD_OUT_TIMES_FILE = 'sold-out-times.json';
+const ORDERS_FILE = '/tmp/orders.json';
+const BATCHES_FILE = '/tmp/batches.json';
+const INSCRIPTIONS_FILE = '/tmp/inscriptions.json';
+const USED_TRANSACTIONS_FILE = '/tmp/used-transactions.json';
+const WHITELIST_FILE = '/tmp/whitelist.json';
 
 // Generic read function
-function readJsonFile<T>(filename: string, defaultValue: T): T {
-  const filePath = getFilePath(filename);
+function readJsonFile<T>(filePath: string, defaultValue: T): T {
   try {
-    if (fs.existsSync(filePath)) {
-      const data = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(data || JSON.stringify(defaultValue));
+    if (!fs.existsSync(filePath)) {
+      return defaultValue;
     }
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data || JSON.stringify(defaultValue));
   } catch (error) {
-    console.error(`Error reading ${filename}:`, error);
+    console.error(`Error reading file ${filePath}:`, error);
+    return defaultValue;
   }
-  return defaultValue;
 }
 
 // Generic write function
-function writeJsonFile<T>(filename: string, data: T): boolean {
-  const filePath = getFilePath(filename);
+function writeJsonFile<T>(filePath: string, data: T): boolean {
   try {
+    // Create /tmp directory if it doesn't exist
+    const tmpDir = '/tmp';
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    // Write file
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {
-    console.error(`Error writing ${filename}:`, error);
+    console.error(`Error writing file ${filePath}:`, error);
     return false;
   }
 }
@@ -100,8 +91,139 @@ export function saveWhitelist(whitelist: WhitelistEntry[]): boolean {
   return writeJsonFile(WHITELIST_FILE, whitelist);
 }
 
+// Initialize batches if they don't exist
+function initializeBatches(): void {
+  const defaultBatches = [
+    {
+      id: 1,
+      price: 250,
+      mintedWallets: 0,
+      maxWallets: 40,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 2,
+      price: 260.71,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 3,
+      price: 271.43,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 4,
+      price: 282.14,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 5,
+      price: 292.86,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 6,
+      price: 303.57,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 7,
+      price: 314.29,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 8,
+      price: 325,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 9,
+      price: 335.71,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 10,
+      price: 346.43,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 11,
+      price: 357.14,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 12,
+      price: 367.86,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 13,
+      price: 378.57,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 14,
+      price: 389.29,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    },
+    {
+      id: 15,
+      price: 400,
+      mintedWallets: 0,
+      maxWallets: 33,
+      ordinals: 66,
+      isSoldOut: false
+    }
+  ];
+
+  if (!fs.existsSync(BATCHES_FILE)) {
+    writeJsonFile(BATCHES_FILE, defaultBatches);
+  }
+}
+
 // Batches functions
 export function getBatches(): Batch[] {
+  initializeBatches();
   return readJsonFile<Batch[]>(BATCHES_FILE, []);
 }
 
@@ -111,6 +233,9 @@ export function saveBatches(batches: Batch[]): boolean {
 
 // Orders functions
 export function getOrders(): Record<string, Order> {
+  if (!fs.existsSync(ORDERS_FILE)) {
+    writeJsonFile(ORDERS_FILE, {});
+  }
   return readJsonFile<Record<string, Order>>(ORDERS_FILE, {});
 }
 
@@ -120,20 +245,20 @@ export function saveOrders(orders: Record<string, Order>): boolean {
 
 // Minted wallets functions
 export function getMintedWallets(): MintedWallet[] {
-  return readJsonFile<MintedWallet[]>(MINTED_WALLETS_FILE, []);
+  return readJsonFile<MintedWallet[]>(USED_TRANSACTIONS_FILE, []);
 }
 
 export function saveMintedWallets(wallets: MintedWallet[]): boolean {
-  return writeJsonFile(MINTED_WALLETS_FILE, wallets);
+  return writeJsonFile(USED_TRANSACTIONS_FILE, wallets);
 }
 
 // Sold out times functions
 export function getSoldOutTimes(): Record<number, number> {
-  return readJsonFile<Record<number, number>>(SOLD_OUT_TIMES_FILE, {});
+  return readJsonFile<Record<number, number>>(INSCRIPTIONS_FILE, {});
 }
 
 export function saveSoldOutTimes(times: Record<number, number>): boolean {
-  return writeJsonFile(SOLD_OUT_TIMES_FILE, times);
+  return writeJsonFile(INSCRIPTIONS_FILE, times);
 }
 
 /**
