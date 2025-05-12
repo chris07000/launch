@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs/promises';
-import { loadWhitelist, WhitelistEntry } from '../mint';
+import { loadWhitelist, WhitelistEntry } from '../utils';
 
 const CURRENT_BATCH_FILE = path.join(process.cwd(), 'data', 'current-batch.json');
 const COOLDOWN_FILE_PATH = path.join(process.cwd(), 'data', 'batch-cooldown.json');
