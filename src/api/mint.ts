@@ -1,32 +1,25 @@
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
+import { 
+  getOrders, 
+  saveOrders, 
+  getBatches,
+  saveBatches,
+  Order,
+  Batch 
+} from '@/lib/storage';
 
 // Batches configuratie
 interface BatchConfig {
   id: number;
   price: number;      // in USD
   maxWallets: number; // maximaal aantal wallets dat kan minten
-  mintedWallets: string[]; // lijst van wallets die al hebben gemint in deze batch
+  mintedWallets: number; // aantal wallets dat al heeft gemint
   ordinals: number;   // aantal ordinals per batch
-}
-
-// Order interface
-interface Order {
-  id: string;
-  btcAddress: string;
-  quantity: number;
-  totalPrice: number;
-  totalPriceUsd: number;
-  pricePerUnit: number;
-  pricePerUnitBtc: number;
-  batchId: number;
-  paymentAddress: string;
-  paymentReference: string; // Unique reference for this payment
-  status: 'pending' | 'paid' | 'completed' | 'failed';
-  createdAt: Date;
-  updatedAt: Date;
-  inscriptionId?: string;
+  isSoldOut: boolean;
+  isFCFS?: boolean;
+  available?: number;
 }
 
 // Inscription interface
@@ -36,9 +29,6 @@ interface Inscription {
   batchId: number;
   assignedToOrder?: string; // Order ID if assigned
 }
-
-// File path for persisting orders
-const ORDERS_FILE_PATH = path.join(process.cwd(), 'data', 'orders.json');
 
 // File path for persisting inscriptions
 const INSCRIPTIONS_FILE_PATH = path.join(process.cwd(), 'data', 'inscriptions.json');
@@ -166,78 +156,26 @@ const saveUsedTransactions = (transactions: UsedTransaction[]): void => {
 
 // Configuratie van batches
 const batchesConfig: Record<number, BatchConfig> = {
-  1: { id: 1, price: 250.00, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  2: { id: 2, price: 260.71, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  3: { id: 3, price: 271.43, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  4: { id: 4, price: 282.14, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  5: { id: 5, price: 292.86, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  6: { id: 6, price: 303.57, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  7: { id: 7, price: 314.29, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  8: { id: 8, price: 325.00, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  9: { id: 9, price: 335.71, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  10: { id: 10, price: 346.43, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  11: { id: 11, price: 357.14, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  12: { id: 12, price: 367.86, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  13: { id: 13, price: 378.57, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  14: { id: 14, price: 389.29, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  15: { id: 15, price: 400.00, maxWallets: 33, mintedWallets: [], ordinals: 66 },
-  16: { id: 16, price: 450.00, maxWallets: 33, mintedWallets: [], ordinals: 66 }
+  1: { id: 1, price: 250.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  2: { id: 2, price: 260.71, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  3: { id: 3, price: 271.43, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  4: { id: 4, price: 282.14, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  5: { id: 5, price: 292.86, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  6: { id: 6, price: 303.57, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  7: { id: 7, price: 314.29, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  8: { id: 8, price: 325.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  9: { id: 9, price: 335.71, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  10: { id: 10, price: 346.43, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  11: { id: 11, price: 357.14, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  12: { id: 12, price: 367.86, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  13: { id: 13, price: 378.57, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  14: { id: 14, price: 389.29, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  15: { id: 15, price: 400.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  16: { id: 16, price: 450.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false }
 };
 
 // In-memory storage for inscriptions
 let inscriptions: Inscription[] = [];
-
-// Load orders from disk
-const loadOrders = (): Record<string, Order> => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    // Check if orders file exists
-    if (!fs.existsSync(ORDERS_FILE_PATH)) {
-      return {};
-    }
-    
-    const orderData = fs.readFileSync(ORDERS_FILE_PATH, 'utf8');
-    const parsedOrders = JSON.parse(orderData);
-    
-    // Convert date strings back to Date objects
-    const processedOrders: Record<string, Order> = {};
-    Object.keys(parsedOrders).forEach(key => {
-      const order = parsedOrders[key];
-      processedOrders[key] = {
-        ...order,
-        createdAt: new Date(order.createdAt),
-        updatedAt: new Date(order.updatedAt)
-      };
-    });
-    
-    console.log(`Loaded ${Object.keys(processedOrders).length} orders from disk`);
-    return processedOrders;
-  } catch (error) {
-    console.error('Error loading orders from disk:', error);
-    return {};
-  }
-};
-
-// Save orders to disk
-const saveOrders = (ordersToSave: Record<string, Order>): void => {
-  try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    fs.writeFileSync(ORDERS_FILE_PATH, JSON.stringify(ordersToSave, null, 2));
-    console.log(`Saved ${Object.keys(ordersToSave).length} orders to disk`);
-  } catch (error) {
-    console.error('Error saving orders to disk:', error);
-  }
-};
 
 // Load inscriptions from disk
 const loadInscriptions = (): Inscription[] => {
@@ -281,7 +219,7 @@ const saveInscriptions = (inscriptionsToSave: Inscription[]): void => {
 };
 
 // In-memory storage voor orders
-export const orders: { [key: string]: Order } = loadOrders();
+export const orders: { [key: string]: Order } = getOrders();
 
 // Initialize inscriptions
 inscriptions = loadInscriptions();
@@ -300,7 +238,7 @@ export function hasWalletMinted(batchId: number, btcAddress: string): boolean {
   const batch = batchesConfig[batchId];
   if (!batch) return false;
   
-  return batch.mintedWallets.includes(btcAddress);
+  return batch.mintedWallets > 0;
 }
 
 /**
@@ -310,7 +248,7 @@ export function isBatchAvailable(batchId: number): boolean {
   const batch = batchesConfig[batchId];
   if (!batch) return false;
   
-  return batch.mintedWallets.length < batch.maxWallets;
+  return batch.mintedWallets < batch.maxWallets;
 }
 
 /**
@@ -548,15 +486,15 @@ export function isWhitelisted(address: string, batchId?: number): boolean {
 /**
  * Admin functie: Haal alle minted wallets op voor alle batches
  */
-export function getMintedWallets(adminPassword: string): Record<number, string[]> | null {
+export function getMintedWallets(adminPassword: string): Record<number, number> | null {
   if (!validateAdminPassword(adminPassword)) {
     return null;
   }
   
-  const result: Record<number, string[]> = {};
+  const result: Record<number, number> = {};
   
   for (const batchId in batchesConfig) {
-    result[Number(batchId)] = [...batchesConfig[Number(batchId)].mintedWallets];
+    result[Number(batchId)] = batchesConfig[Number(batchId)].mintedWallets;
   }
   
   return result;
@@ -644,7 +582,7 @@ export async function createMintOrder(
   console.log('Creating mint order:', { btcAddress, quantity, batchId });
   
   // Load existing orders
-  const existingOrders = loadOrders();
+  const existingOrders = getOrders();
   
   // Validate the BTC address
   if (!isValidOrdinalAddress(btcAddress)) {
@@ -688,12 +626,14 @@ export async function createMintOrder(
     updatedAt: new Date()
   };
   
-  // Save order to global orders object
+  // Save order to global orders object and file
   orders[orderId] = newOrder;
-  
-  // Save order to file system
   existingOrders[orderId] = newOrder;
-  saveOrders(existingOrders);
+  
+  const saved = saveOrders(existingOrders);
+  if (!saved) {
+    throw new Error('Failed to save order');
+  }
   
   console.log('Order created successfully:', newOrder);
   
@@ -717,48 +657,21 @@ export async function createMintOrder(
  * API handler voor het ophalen van een order status
  */
 export async function getOrderStatus(orderId: string) {
-  // Order ophalen en uitgebreide logging toevoegen
-  console.log(`Looking for order with ID: ${orderId}`);
-  console.log(`Available orders: ${Object.keys(orders).length}`);
-  
-  const order = orders[orderId];
-  
-  if (!order) {
-    // Log probleem en beschikbare order IDs voor debugging
-    console.error(`Order not found: ${orderId}`);
-    console.error(`Available order IDs: ${Object.keys(orders).join(', ') || 'none'}`);
-    throw new Error(`Order not found with ID: ${orderId}`);
+  try {
+    // Get current orders
+    const existingOrders = getOrders();
+    
+    // Check if order exists
+    if (!existingOrders[orderId]) {
+      throw new Error(`Order not found with ID: ${orderId}`);
+    }
+    
+    // Return order status
+    return existingOrders[orderId];
+  } catch (error: any) {
+    console.error(`Error getting order status for ${orderId}:`, error);
+    throw error;
   }
-  
-  console.log(`Found order ${orderId}:`, order);
-  
-  // Calculate USD price based on the order's BTC price and batch
-  const batch = batchesConfig[order.batchId];
-  const pricePerUnit = batch ? batch.price : 1.00; // Default fallback price
-  const totalPriceUsd = order.quantity * pricePerUnit;
-  const totalPriceBtc = usdToBtc(totalPriceUsd); // Convert USD to BTC
-  
-  // Get associated inscription if any
-  const inscription = order.inscriptionId ? getInscriptionForOrder(orderId) : null;
-  
-  return {
-    id: order.id,
-    status: order.status,
-    quantity: order.quantity,
-    totalPrice: totalPriceBtc, // Use BTC price here
-    totalPriceUsd,
-    totalPriceBtc, // Add explicit BTC price
-    paymentAddress: order.paymentAddress,
-    paymentReference: order.paymentReference,
-    btcAddress: order.btcAddress,
-    batchId: order.batchId,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    pricePerUnit,
-    pricePerUnitBtc: usdToBtc(pricePerUnit), // Add BTC price per unit
-    inscriptionId: order.inscriptionId || null,
-    inscription: inscription
-  };
 }
 
 /**
@@ -769,64 +682,34 @@ export async function updateOrderStatus(
   orderId: string,
   status: 'pending' | 'paid' | 'completed' | 'failed'
 ) {
-  const order = orders[orderId];
-  
-  if (!order) {
-    throw new Error('Order not found');
-  }
-  
-  // Only update batch info if transitioning from pending to paid/completed
-  const shouldUpdateBatch = (order.status === 'pending' && (status === 'paid' || status === 'completed'));
-  
-  order.status = status;
-  order.updatedAt = new Date();
-  
-  // Als de status 'paid' is, update de batch informatie
-  if (shouldUpdateBatch) {
-    try {
-      const batchesFile = path.join(process.cwd(), 'data', 'batches.json');
-      if (fs.existsSync(batchesFile)) {
-        let batches = [];
-        try {
-          const batchesData = fs.readFileSync(batchesFile, 'utf8');
-          batches = JSON.parse(batchesData || '[]');
-        } catch (e) {
-          console.error('Error reading batches file:', e);
-          batches = [];
-        }
-        
-        // Find batch in file
-        const batchIndex = batches.findIndex((b: { id: number }) => b.id === order.batchId);
-        if (batchIndex !== -1) {
-          // Update the mintedWallets count with the actual order quantity
-          batches[batchIndex].mintedWallets = (batches[batchIndex].mintedWallets || 0) + order.quantity;
-          
-          // Check if batch is now sold out
-          const isSoldOut = batches[batchIndex].mintedWallets >= batches[batchIndex].maxWallets;
-          batches[batchIndex].isSoldOut = isSoldOut;
-          
-          // Als de batch sold out is, start de timer
-          if (isSoldOut) {
-            markBatchAsSoldOut(order.batchId);
-          }
-          
-          // Save updated batches
-          fs.writeFileSync(batchesFile, JSON.stringify(batches, null, 2));
-          console.log(`Updated batch ${order.batchId} with ${order.quantity} more Tigers. Total minted: ${batches[batchIndex].mintedWallets}`);
-        }
-      }
-    } catch (error) {
-      console.error('Error updating batches.json:', error);
+  try {
+    // Get current orders
+    const existingOrders = getOrders();
+    
+    // Check if order exists
+    if (!existingOrders[orderId]) {
+      throw new Error(`Order not found with ID: ${orderId}`);
     }
+    
+    // Update order status
+    const order = existingOrders[orderId];
+    order.status = status;
+    order.updatedAt = new Date();
+    
+    // Save updated order
+    existingOrders[orderId] = order;
+    orders[orderId] = order; // Update in-memory storage
+    
+    const saved = saveOrders(existingOrders);
+    if (!saved) {
+      throw new Error('Failed to save order status');
+    }
+    
+    return order;
+  } catch (error: any) {
+    console.error(`Error updating order status for ${orderId}:`, error);
+    throw error;
   }
-  
-  // Save updated order to file
-  const ordersFile = path.join(process.cwd(), 'data', 'orders.json');
-  const existingOrders = loadOrders();
-  existingOrders[orderId] = order;
-  saveOrders(existingOrders);
-  
-  return order;
 }
 
 /**
@@ -843,9 +726,9 @@ export async function getBatchInfo(batchId: number) {
     id: batch.id,
     price: batch.price,
     maxWallets: batch.maxWallets,
-    mintedWallets: batch.mintedWallets.length,
-    available: batch.maxWallets - batch.mintedWallets.length,
-    isSoldOut: batch.mintedWallets.length >= batch.maxWallets,
+    mintedWallets: batch.mintedWallets,
+    available: batch.maxWallets - batch.mintedWallets,
+    isSoldOut: batch.isSoldOut,
     ordinals: batch.ordinals
   };
 }
@@ -1002,101 +885,44 @@ export function getInscriptionForOrder(orderId: string): Inscription | null {
  * Deze functie doorloopt alle orders en update de geminte wallets in batches.json
  */
 export function syncOrdersToBatches(adminPassword: string): boolean {
-  if (!validateAdminPassword(adminPassword)) {
-    return false;
-  }
-  
   try {
-    console.log("Starting orders to batches synchronization...");
+    // Validate admin password
+    if (!validateAdminPassword(adminPassword)) {
+      throw new Error('Invalid admin password');
+    }
     
-    // Verzamel alle geminte wallets per batch
-    const mintedWalletsByBatch: Record<number, string[]> = {};
+    // Get current orders and batches
+    const existingOrders = getOrders();
+    const batches = getBatches();
     
-    // Houd het totaal aantal Tigers per batch bij
-    const mintedTigersByBatch: Record<number, number> = {};
+    // Reset batch counters
+    batches.forEach((batch: Batch) => {
+      batch.mintedWallets = 0;
+      batch.isSoldOut = false;
+    });
     
-    // Doorloop alle orders met status 'paid' of 'completed'
-    for (const orderId in orders) {
-      const order = orders[orderId];
+    // Count orders per batch
+    Object.values(existingOrders).forEach(order => {
       if (order.status === 'paid' || order.status === 'completed') {
-        const batchId = order.batchId;
-        
-        // Initialiseer arrays en tellers als ze nog niet bestaan
-        if (!mintedWalletsByBatch[batchId]) {
-          mintedWalletsByBatch[batchId] = [];
-        }
-        if (!mintedTigersByBatch[batchId]) {
-          mintedTigersByBatch[batchId] = 0;
-        }
-        
-        // Voeg wallet toe als deze nog niet in de lijst staat
-        if (!mintedWalletsByBatch[batchId].includes(order.btcAddress)) {
-          mintedWalletsByBatch[batchId].push(order.btcAddress);
-        }
-        
-        // Verhoog het aantal geminte tigers voor deze batch
-        mintedTigersByBatch[batchId] += order.quantity || 1;
-      }
-    }
-    
-    console.log("Collected minted wallets by batch:", mintedWalletsByBatch);
-    console.log("Collected minted tigers by batch:", mintedTigersByBatch);
-    
-    // Update de in-memory batchesConfig
-    for (const batchId in mintedWalletsByBatch) {
-      const numericBatchId = Number(batchId);
-      if (batchesConfig[numericBatchId]) {
-        batchesConfig[numericBatchId].mintedWallets = [...mintedWalletsByBatch[numericBatchId]];
-        console.log(`Updated batch ${batchId} with ${batchesConfig[numericBatchId].mintedWallets.length} minted wallets`);
-      }
-    }
-    
-    // Update het batches.json bestand
-    const batchesFile = path.join(process.cwd(), 'data', 'batches.json');
-    if (fs.existsSync(batchesFile)) {
-      let batches = [];
-      try {
-        const batchesData = fs.readFileSync(batchesFile, 'utf8');
-        batches = JSON.parse(batchesData || '[]');
-      } catch (e) {
-        console.error('Error reading batches file:', e);
-        batches = [];
-      }
-      
-      // Update elke batch in het bestand
-      for (const batch of batches) {
-        const batchId = batch.id;
-        if (mintedTigersByBatch[batchId]) {
-          // Gebruik het werkelijke aantal geminte tigers in plaats van het aantal wallets
-          batch.mintedWallets = mintedTigersByBatch[batchId];
-          // Update isSoldOut flag
+        const batch = batches.find((b: Batch) => b.id === order.batchId);
+        if (batch) {
+          batch.mintedWallets += order.quantity;
           batch.isSoldOut = batch.mintedWallets >= batch.maxWallets;
-        } else {
-          batch.mintedWallets = 0;
-          batch.isSoldOut = false;
         }
       }
-      
-      // Sla de bijgewerkte batches op
-      fs.writeFileSync(batchesFile, JSON.stringify(batches, null, 2));
-      console.log(`Updated batches.json with new minted tiger counts`);
+    });
+    
+    // Save updated batches
+    const saved = saveBatches(batches);
+    if (!saved) {
+      throw new Error('Failed to save batches');
     }
     
     return true;
-  } catch (error) {
-    console.error('Error in syncOrdersToBatches:', error);
+  } catch (error: any) {
+    console.error('Error syncing orders to batches:', error);
     return false;
   }
-}
-
-// Define Batch interface
-interface Batch {
-  id: number;
-  price: number;
-  mintedWallets: number;
-  maxWallets: number;
-  ordinals: number;
-  isSoldOut: boolean;
 }
 
 // Default batches als fallback
@@ -1153,7 +979,7 @@ export function updateBatchStatus(batchId: number) {
   if (!batch) return;
 
   // Check of de batch nu sold out is
-  if (batch.mintedWallets.length >= batch.maxWallets) {
+  if (batch.mintedWallets >= batch.maxWallets) {
     markBatchAsSoldOut(batchId);
   }
 } 

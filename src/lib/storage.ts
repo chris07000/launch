@@ -1,84 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
-// Use /tmp in production (Vercel) and data directory locally
-const BASE_DIR = process.env.VERCEL 
-  ? '/tmp'
-  : path.join(process.cwd(), 'data');
-
-// Ensure the base directory exists
-if (!fs.existsSync(BASE_DIR)) {
-  fs.mkdirSync(BASE_DIR, { recursive: true });
-}
-
-// Copy initial data from repository to /tmp in production
-if (process.env.VERCEL) {
-  const sourceDir = path.join(process.cwd(), 'data');
-  if (fs.existsSync(sourceDir)) {
-    try {
-      const files = fs.readdirSync(sourceDir);
-      files.forEach(file => {
-        if (file.endsWith('.json')) {
-          const sourcePath = path.join(sourceDir, file);
-          const targetPath = path.join(BASE_DIR, file);
-          if (!fs.existsSync(targetPath)) {
-            fs.copyFileSync(sourcePath, targetPath);
-            console.log(`Copied ${file} to /tmp`);
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Error copying initial data:', error);
-    }
-  }
-}
-
-// Define all data file paths
-export const DATA_FILES = {
-  whitelist: path.join(BASE_DIR, 'whitelist.json'),
-  batches: path.join(BASE_DIR, 'batches.json'),
-  orders: path.join(BASE_DIR, 'orders.json'),
-  mintStart: path.join(BASE_DIR, 'mint-start.json'),
-  mintedWallets: path.join(BASE_DIR, 'minted-wallets.json'),
-  inscriptions: path.join(BASE_DIR, 'inscriptions.json'),
-  usedTransactions: path.join(BASE_DIR, 'used-transactions.json'),
-  currentBatch: path.join(BASE_DIR, 'current-batch.json'),
-  soldOutTimes: path.join(BASE_DIR, 'sold-out-times.json'),
-  batchCooldown: path.join(BASE_DIR, 'batch-cooldown.json')
-};
-
-// Generic read function
-export function readJsonFile<T>(filePath: string, defaultValue: T): T {
-  try {
-    if (!fs.existsSync(filePath)) {
-      return defaultValue;
-    }
-    const data = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(data) as T;
-  } catch (error) {
-    console.error(`Error reading ${filePath}:`, error);
-    return defaultValue;
-  }
-}
-
-// Generic write function
-export function writeJsonFile<T>(filePath: string, data: T): boolean {
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-    console.log(`Successfully wrote to ${filePath}`);
-    return true;
-  } catch (error) {
-    console.error(`Error writing to ${filePath}:`, error);
-    return false;
-  }
-}
-
-// Specific functions for each data type
+// Types
 export interface WhitelistEntry {
   address: string;
   batchId: number;
   createdAt: string;
-  updatedAt?: string;  // Optional because it only exists after an update
+  updatedAt?: string;
 }
 
 export interface Batch {
@@ -89,6 +17,7 @@ export interface Batch {
   ordinals: number;
   isSoldOut: boolean;
   isFCFS?: boolean;
+  available?: number;
 }
 
 export interface Order {
@@ -96,44 +25,113 @@ export interface Order {
   btcAddress: string;
   quantity: number;
   totalPrice: number;
+  totalPriceUsd: number;
+  pricePerUnit: number;
+  pricePerUnitBtc: number;
   batchId: number;
   paymentAddress: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
+  paymentReference: string;
+  status: 'pending' | 'paid' | 'completed' | 'failed';
+  createdAt: Date;
+  updatedAt: Date;
   inscriptionId?: string;
 }
 
-// Helper functions for specific data types
+export interface MintedWallet {
+  address: string;
+  batchId: number;
+  mintedAt: string;
+}
+
+// Get base directory based on environment
+const getBaseDir = () => {
+  // Use /tmp in production (Vercel), data directory in development
+  const baseDir = process.env.NODE_ENV === 'production' ? '/tmp' : path.join(process.cwd(), 'data');
+  
+  // Ensure directory exists
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
+  }
+  
+  return baseDir;
+};
+
+// File paths
+const getFilePath = (filename: string) => path.join(getBaseDir(), filename);
+
+const WHITELIST_FILE = 'whitelist.json';
+const BATCHES_FILE = 'batches.json';
+const ORDERS_FILE = 'orders.json';
+const MINTED_WALLETS_FILE = 'minted-wallets.json';
+const SOLD_OUT_TIMES_FILE = 'sold-out-times.json';
+
+// Generic read function
+function readJsonFile<T>(filename: string, defaultValue: T): T {
+  const filePath = getFilePath(filename);
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data || JSON.stringify(defaultValue));
+    }
+  } catch (error) {
+    console.error(`Error reading ${filename}:`, error);
+  }
+  return defaultValue;
+}
+
+// Generic write function
+function writeJsonFile<T>(filename: string, data: T): boolean {
+  const filePath = getFilePath(filename);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error(`Error writing ${filename}:`, error);
+    return false;
+  }
+}
+
+// Whitelist functions
 export function getWhitelist(): WhitelistEntry[] {
-  return readJsonFile<WhitelistEntry[]>(DATA_FILES.whitelist, []);
+  return readJsonFile<WhitelistEntry[]>(WHITELIST_FILE, []);
 }
 
+export function saveWhitelist(whitelist: WhitelistEntry[]): boolean {
+  return writeJsonFile(WHITELIST_FILE, whitelist);
+}
+
+// Batches functions
 export function getBatches(): Batch[] {
-  return readJsonFile<Batch[]>(DATA_FILES.batches, []);
+  return readJsonFile<Batch[]>(BATCHES_FILE, []);
 }
 
+export function saveBatches(batches: Batch[]): boolean {
+  return writeJsonFile(BATCHES_FILE, batches);
+}
+
+// Orders functions
 export function getOrders(): Record<string, Order> {
-  return readJsonFile<Record<string, Order>>(DATA_FILES.orders, {});
+  return readJsonFile<Record<string, Order>>(ORDERS_FILE, {});
 }
 
-export function getMintedWallets(): string[] {
-  return readJsonFile<string[]>(DATA_FILES.mintedWallets, []);
+export function saveOrders(orders: Record<string, Order>): boolean {
+  return writeJsonFile(ORDERS_FILE, orders);
 }
 
-// Save functions
-export function saveWhitelist(data: WhitelistEntry[]): boolean {
-  return writeJsonFile(DATA_FILES.whitelist, data);
+// Minted wallets functions
+export function getMintedWallets(): MintedWallet[] {
+  return readJsonFile<MintedWallet[]>(MINTED_WALLETS_FILE, []);
 }
 
-export function saveBatches(data: Batch[]): boolean {
-  return writeJsonFile(DATA_FILES.batches, data);
+export function saveMintedWallets(wallets: MintedWallet[]): boolean {
+  return writeJsonFile(MINTED_WALLETS_FILE, wallets);
 }
 
-export function saveOrders(data: Record<string, Order>): boolean {
-  return writeJsonFile(DATA_FILES.orders, data);
+// Sold out times functions
+export function getSoldOutTimes(): Record<number, number> {
+  return readJsonFile<Record<number, number>>(SOLD_OUT_TIMES_FILE, {});
 }
 
-export function saveMintedWallets(data: string[]): boolean {
-  return writeJsonFile(DATA_FILES.mintedWallets, data);
+export function saveSoldOutTimes(times: Record<number, number>): boolean {
+  return writeJsonFile(SOLD_OUT_TIMES_FILE, times);
 } 
