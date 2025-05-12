@@ -17,18 +17,6 @@ interface UsedTransaction {
   timestamp: string;
 }
 
-// Batches configuratie
-interface BatchConfig {
-  id: number;
-  price: number;      // in USD
-  maxWallets: number; // maximaal aantal wallets dat kan minten
-  mintedWallets: number; // aantal wallets dat al heeft gemint
-  ordinals: number;   // aantal ordinals per batch
-  isSoldOut: boolean;
-  isFCFS?: boolean;
-  available?: number;
-}
-
 // Inscription interface
 interface Inscription {
   inscriptionId: string;
@@ -542,14 +530,13 @@ export function isWalletEligible(batchId: number, btcAddress: string): boolean {
   }
 
   // Check total Tigers minted by this wallet across all batches
-  let totalTigersMinted = 0;
-  for (const orderId in orders) {
-    const order = orders[orderId];
+  const totalTigersMinted = orders.reduce((total, order) => {
     if ((order.status === 'paid' || order.status === 'completed') && 
         order.btcAddress === btcAddress) {
-      totalTigersMinted += order.quantity;
+      return total + order.quantity;
     }
-  }
+    return total;
+  }, 0);
   
   console.log(`Total Tigers minted by ${btcAddress}: ${totalTigersMinted}`);
   
@@ -841,8 +828,9 @@ export function assignInscriptionToOrder(
     return false;
   }
   
-  // Check if order exists
-  if (!orders[orderId]) {
+  // Find order in the orders array
+  const orderIndex = orders.findIndex(o => o.id === orderId);
+  if (orderIndex === -1) {
     return false;
   }
   
@@ -850,7 +838,7 @@ export function assignInscriptionToOrder(
   inscriptions[inscriptionIndex].assignedToOrder = orderId;
   
   // Update order with the inscription
-  orders[orderId].inscriptionId = inscriptionId;
+  orders[orderIndex].inscriptionId = inscriptionId;
   
   // Save both to disk
   saveInscriptions(inscriptions);
@@ -863,8 +851,8 @@ export function assignInscriptionToOrder(
  * Get inscription for an order
  */
 export function getInscriptionForOrder(orderId: string): Inscription | null {
-  // Get the order
-  const order = orders[orderId];
+  // Get the order from the orders array
+  const order = orders.find(o => o.id === orderId);
   if (!order || !order.inscriptionId) {
     return null;
   }
