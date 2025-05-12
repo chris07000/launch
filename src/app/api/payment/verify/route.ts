@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrderStatus, updateOrderStatus, isTransactionUsed, markTransactionAsUsed } from '@/api/mint';
-import * as storage from '@/lib/storage-wrapper';
+import * as storage from '@/lib/storage-wrapper-db-only';
 import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';

@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { sql } from '@vercel/postgres';
+import * as storage from '@/lib/storage-wrapper-db-only';
 
 export async function GET() {
   try {

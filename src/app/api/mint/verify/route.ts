@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as storage from '@/lib/storage-wrapper';
+import * as storage from '@/lib/storage-wrapper-db-only';
 
 export const dynamic = 'force-dynamic';
 
