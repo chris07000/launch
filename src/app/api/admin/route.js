@@ -1,67 +1,12 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { syncOrdersToBatches } from './utils';
 
 // Validate a Bitcoin Ordinal address (bc1p...)
 function isValidOrdinalAddress(address) {
   // Ordinal addresses start with bc1p for Taproot addresses
   return typeof address === 'string' && address.startsWith('bc1p');
-}
-
-// Sync orders with batches
-export async function syncOrdersToBatches(password) {
-  if (!password || password !== process.env.ADMIN_PASSWORD) {
-    throw new Error('Invalid password');
-  }
-
-  try {
-    const ordersFile = path.join(process.cwd(), 'data/orders.json');
-    const batchesFile = path.join(process.cwd(), 'data/batches.json');
-    const mintedWalletsFile = path.join(process.cwd(), 'data/minted-wallets.json');
-
-    let orders = {};
-    let batches = [];
-    let mintedWallets = [];
-
-    if (fs.existsSync(ordersFile)) {
-      const ordersData = fs.readFileSync(ordersFile, 'utf8');
-      orders = JSON.parse(ordersData || '{}');
-    }
-
-    if (fs.existsSync(batchesFile)) {
-      const batchesData = fs.readFileSync(batchesFile, 'utf8');
-      batches = JSON.parse(batchesData || '[]');
-    }
-
-    if (fs.existsSync(mintedWalletsFile)) {
-      const mintedWalletsData = fs.readFileSync(mintedWalletsFile, 'utf8');
-      mintedWallets = JSON.parse(mintedWalletsData || '[]');
-    }
-
-    // Update batches based on orders
-    for (const orderId in orders) {
-      const order = orders[orderId];
-      if (order.status === 'paid' && !mintedWallets.includes(order.btcAddress)) {
-        const batch = batches.find(b => b.id === order.batchId);
-        if (batch) {
-          batch.mintedWallets += 1;
-          if (batch.mintedWallets >= batch.maxWallets) {
-            batch.isSoldOut = true;
-          }
-          mintedWallets.push(order.btcAddress);
-        }
-      }
-    }
-
-    // Save updated data
-    fs.writeFileSync(batchesFile, JSON.stringify(batches, null, 2));
-    fs.writeFileSync(mintedWalletsFile, JSON.stringify(mintedWallets, null, 2));
-
-    return true;
-  } catch (error) {
-    console.error('Error syncing orders to batches:', error);
-    return false;
-  }
 }
 
 // Handle GET requests
@@ -196,14 +141,23 @@ export async function GET(request) {
   return NextResponse.json({ error: 'Ongeldige actie' }, { status: 400 });
 }
 
-// Handle the POST requests
+// Handle POST requests
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { password, action, address, batchId, inscriptionId, orderId, btcAddress, quantity } = body;
+    const data = await request.json();
+    const { action, password, address, batchId, inscriptionId, orderId, btcAddress, quantity } = data;
     
     if (!password || password !== process.env.ADMIN_PASSWORD) {
-      return NextResponse.json({ error: 'Ongeldige wachtwoord' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+    }
+    
+    if (action === 'syncOrders') {
+      const success = await syncOrdersToBatches(password);
+      if (success) {
+        return NextResponse.json({ message: 'Orders synced successfully' });
+      } else {
+        return NextResponse.json({ error: 'Failed to sync orders' }, { status: 500 });
+      }
     }
     
     // Handle different actions
@@ -547,31 +501,6 @@ export async function POST(request) {
         console.error('Reset error:', error);
         return NextResponse.json({ 
           error: 'Er is een fout opgetreden bij het resetten van de data' 
-        }, { status: 500 });
-      }
-    }
-    else if (action === 'syncOrdersToBatches') {
-      try {
-        // Dynamisch importeren van de mint API om circular dependencies te voorkomen
-        const { syncOrdersToBatches } = await import('@/api/mint');
-        
-        // Synchroniseer orders met batches
-        const success = syncOrdersToBatches(password);
-        
-        if (success) {
-          return NextResponse.json({ 
-            success: true, 
-            message: 'Orders en batches zijn gesynchroniseerd. Dashboard zou nu alle geminte wallets moeten tonen.'
-          });
-        } else {
-          return NextResponse.json({ 
-            error: 'Er is een fout opgetreden bij het synchroniseren van orders en batches.' 
-          }, { status: 500 });
-        }
-      } catch (error) {
-        console.error('Error in syncOrdersToBatches action:', error);
-        return NextResponse.json({ 
-          error: 'Er is een fout opgetreden bij het synchroniseren van orders en batches.' 
         }, { status: 500 });
       }
     }
