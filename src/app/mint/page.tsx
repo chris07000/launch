@@ -64,7 +64,7 @@ export default function Home() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log('Fetching batch info...');
+        console.log('Ophalen batch info op mintpagina...');
         
         // Vervang de externe URL door directe API route call
         const response = await fetch('/api/mint/current-batch');
@@ -74,19 +74,32 @@ export default function Home() {
         }
         
         const data = await response.json();
-        console.log('Ontvangen batch data:', data);
-        console.log('Batches array:', data.batches);
+        console.log('Ontvangen current-batch data op mintpagina:', data);
         
-        if (data.batches && Array.isArray(data.batches)) {
-          console.log('Eerste batch prijs:', data.batches[0]?.price, 'Type:', typeof data.batches[0]?.price);
-          console.log('Alle batch prijzen:', data.batches.map((b: Batch) => ({ id: b.id, price: b.price, typeOfPrice: typeof b.price })));
-          setBatches(data.batches);
+        // Direct de mintedTigers gebruiken van de API
+        if (data.mintedTigers !== undefined) {
+          // Deze data rechtstreeks tonen in de UI
+          console.log(`Direct mintedTigers uit API: ${data.mintedTigers}`);
+        }
+        
+        // Aanvullende data ophalen
+        const batchesResponse = await fetch('/api/mint');
+        if (!batchesResponse.ok) {
+          throw new Error(`HTTP error ${batchesResponse.status}`);
+        }
+        
+        const batchesData = await batchesResponse.json();
+        console.log('Ontvangen batch data op mintpagina:', batchesData);
+        
+        if (batchesData.batches && Array.isArray(batchesData.batches)) {
+          console.log('Eerste batch mintedTigers:', batchesData.batches[0]?.mintedTigers);
+          setBatches(batchesData.batches);
         } else {
           console.log('Geen geldige batches data ontvangen');
         }
         
         // Store the current batch and batches data
-        setCurrentBatch(data.currentBatch);
+        setCurrentBatch(data.currentBatch || batchesData.currentBatch);
         setIsSoldOut(data.soldOut);
         
         // For sold out batches, handle cooldown timer
@@ -429,6 +442,25 @@ export default function Home() {
     );
   }
 
+  function convertCurrentBatchData() {
+    const currentBatchData = batches.find(b => b.id === currentBatch);
+    if (!currentBatchData) return "0 / 0";
+    
+    // Log voor debug
+    console.log(`Weergave data batch ${currentBatch}:`, {
+      mintedTigers: currentBatchData.mintedTigers,
+      mintedWallets: currentBatchData.mintedWallets,
+      ordinals: currentBatchData.ordinals
+    });
+    
+    const mintedCount = currentBatchData.mintedTigers !== undefined 
+      ? currentBatchData.mintedTigers 
+      : (currentBatchData.mintedWallets || 0) * 2;
+    const totalCount = currentBatchData.ordinals || 66;
+    
+    return `${mintedCount} / ${totalCount} Tigers`;
+  }
+
   return (
     <div className="min-h-screen bg-black text-white pixel-grid-bg" style={{ fontFamily: "'Press Start 2P', monospace" }}>
       <nav style={{ 
@@ -624,13 +656,7 @@ export default function Home() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <div style={{ fontSize: '10px', color: '#aaa' }}>MINTED:</div>
                   <div style={{ fontSize: '10px' }}>
-                    {loading ? '...' : `${(() => {
-                      const currentBatchData = batches.find(b => b.id === currentBatch);
-                      if (!currentBatchData) return 0;
-                      return currentBatchData.mintedTigers !== undefined 
-                        ? currentBatchData.mintedTigers 
-                        : (currentBatchData.mintedWallets || 0) * 2;
-                    })()} / ${(batches.find(b => b.id === currentBatch)?.ordinals || 66)} Tigers`}
+                    {loading ? '...' : convertCurrentBatchData()}
                   </div>
                 </div>
                 <div style={{ 
@@ -648,6 +674,7 @@ export default function Home() {
                         ? currentBatchData.mintedTigers 
                         : (currentBatchData.mintedWallets || 0) * 2;
                       const total = currentBatchData.ordinals || 66;
+                      console.log(`Progress bar: ${minted}/${total} = ${(minted / total) * 100}%`);
                       return (minted / total) * 100;
                     })()}%`, 
                     height: '100%', 

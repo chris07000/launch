@@ -41,11 +41,22 @@ export default function HomePage() {
   useEffect(() => {
     const fetchBatchInfo = async () => {
       try {
+        console.log('Ophalen batch info op homepage...');
         const currentBatchData = await fetchApi('/api/mint/current-batch');
+        console.log('Ontvangen data homepage:', currentBatchData);
         
         // Update current batch
         if (currentBatchData.currentBatch) {
           setCurrentBatch(currentBatchData.currentBatch);
+        }
+        
+        // Direct tigers data gebruiken van de API
+        if (currentBatchData.mintedTigers !== undefined) {
+          setMintedTigers(currentBatchData.mintedTigers);
+        }
+        
+        if (currentBatchData.totalTigers) {
+          setTotalTigers(currentBatchData.totalTigers);
         }
         
         // Check if batch is sold out
@@ -72,20 +83,22 @@ export default function HomePage() {
           setTimeLeft(0);
         }
         
+        // Als we aanvullende data nodig hebben, gebruik de andere API route
         const data = await fetchApi('/api/mint');
+        console.log('Aanvullende batch data:', data);
         
         if (data && Array.isArray(data.batches)) {
           const currentBatchData = data.batches.find((b: { id: number }) => b.id === currentBatch);
           
           // Update tigers count - prefer direct mintedTigers value if available
           if (currentBatchData) {
-            const tigers = currentBatchData.mintedTigers !== undefined 
-              ? currentBatchData.mintedTigers 
-              : (currentBatchData.mintedWallets || 0) * 2;
-            setMintedTigers(tigers);
-            
-            // Total tigers is ordinals property
-            setTotalTigers(currentBatchData.ordinals || 66);
+            // Alleen gebruiken als we het nog niet hebben van de eerste API aanroep
+            if (currentBatchData.mintedTigers !== undefined && !currentBatchData.mintedTigers) {
+              setMintedTigers(currentBatchData.mintedTigers);
+              
+              // Total tigers is ordinals property
+              setTotalTigers(currentBatchData.ordinals || 66);
+            }
           }
         }
         
