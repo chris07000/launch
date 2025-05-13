@@ -389,4 +389,28 @@ export async function saveMintedWallets(wallets: MintedWallet[]): Promise<boolea
     console.error('Error saving minted wallets to database:', error);
     return false;
   }
+}
+
+// Directe TRUNCATE functie voor orders
+export async function truncateOrders(): Promise<boolean> {
+  try {
+    await withRetry(async () => await sql`TRUNCATE orders RESTART IDENTITY CASCADE`);
+    console.log('Orders truncated successfully via direct SQL TRUNCATE');
+    return true;
+  } catch (error) {
+    console.error('Error truncating orders table:', error);
+    return false;
+  }
+}
+
+// Directe TRUNCATE functie voor minted wallets
+export async function truncateMintedWallets(): Promise<boolean> {
+  try {
+    await withRetry(async () => await sql`TRUNCATE minted_wallets RESTART IDENTITY CASCADE`);
+    console.log('Minted wallets truncated successfully via direct SQL TRUNCATE');
+    return true;
+  } catch (error) {
+    console.error('Error truncating minted_wallets table:', error);
+    return false;
+  }
 } 

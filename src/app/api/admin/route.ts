@@ -365,13 +365,16 @@ export async function POST(request: Request) {
       try {
         console.log('Resetting orders and minted_wallets only...');
         
-        // Reset orders
-        await storage.saveOrders([]);
-        console.log('Orders reset successfully');
+        // Directe SQL TRUNCATE gebruiken voor orders en minted wallets
+        const ordersTruncated = await storage.truncateOrders();
+        console.log('Orders truncate result:', ordersTruncated);
         
-        // Reset minted wallets
+        const walletsTruncated = await storage.truncateMintedWallets();
+        console.log('Minted wallets truncate result:', walletsTruncated);
+        
+        // Voor de zekerheid ook nog een keer de leeg arrays proberen te saven
+        await storage.saveOrders([]);
         await storage.saveMintedWallets([]);
-        console.log('Minted wallets reset successfully');
         
         // Get current batches
         const batches = await storage.getBatches();
@@ -388,7 +391,7 @@ export async function POST(request: Request) {
         
         return new Response(JSON.stringify({ 
           success: true, 
-          message: 'Orders and minted wallets have been reset successfully' 
+          message: 'Orders and minted wallets have been reset successfully using TRUNCATE' 
         }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
@@ -601,6 +604,100 @@ export async function POST(request: Request) {
       } catch (error: any) {
         console.error('Error during complete data reset:', error);
         return new Response(JSON.stringify({ error: 'Failed to reset all data' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    // FORCE RESET: Direct SQL gebruiken om alle tabellen te legen
+    else if (action === 'force-reset') {
+      try {
+        console.log('FORCE RESET: Resetting all database tables directly with SQL...');
+        
+        // Gebruik directe SQL queries om tabellen te legen - dit is gegarandeerd effectief
+        try {
+          await sql`TRUNCATE orders RESTART IDENTITY CASCADE`;
+          console.log('Orders table truncated successfully');
+        } catch (sqlError) {
+          console.error('Error truncating orders table:', sqlError);
+        }
+        
+        try {
+          await sql`TRUNCATE minted_wallets RESTART IDENTITY CASCADE`;
+          console.log('Minted wallets table truncated successfully');
+        } catch (sqlError) {
+          console.error('Error truncating minted_wallets table:', sqlError);
+        }
+        
+        try {
+          await sql`TRUNCATE whitelist RESTART IDENTITY CASCADE`;
+          console.log('Whitelist table truncated successfully');
+        } catch (sqlError) {
+          console.error('Error truncating whitelist table:', sqlError);
+        }
+        
+        try {
+          await sql`TRUNCATE used_transactions RESTART IDENTITY CASCADE`;
+          console.log('Transactions table truncated successfully');
+        } catch (sqlError) {
+          console.error('Error truncating used_transactions table:', sqlError);
+        }
+        
+        // Reset batches with direct SQL
+        try {
+          await sql`TRUNCATE batches RESTART IDENTITY CASCADE`;
+          console.log('Batches table truncated successfully');
+          
+          // Herinitialiseren van batches tabel met default waarden
+          for (const batch of defaultBatches) {
+            await sql`
+              INSERT INTO batches (id, price, minted_wallets, max_wallets, ordinals, is_sold_out, is_fcfs)
+              VALUES (${batch.id}, ${batch.price}, 0, ${batch.maxWallets}, ${batch.ordinals}, false, ${batch.isFCFS || false})
+            `;
+          }
+          console.log('Batches table reinitialized with default values');
+        } catch (sqlError) {
+          console.error('Error resetting batches table:', sqlError);
+        }
+        
+        // Reset current_batch table
+        try {
+          await sql`TRUNCATE current_batch RESTART IDENTITY CASCADE`;
+          await sql`INSERT INTO current_batch (current_batch, sold_out_at) VALUES (1, NULL)`;
+          console.log('Current batch reset to 1 successfully');
+        } catch (sqlError) {
+          console.error('Error resetting current_batch table:', sqlError);
+        }
+        
+        // Toch ook nog de storage functies aanroepen voor consistentie
+        await storage.saveOrders([]);
+        await storage.saveMintedWallets([]);
+        await storage.saveWhitelist([]);
+        
+        // Reset batches to default state met 0 mintedWallets
+        const freshBatches = JSON.parse(JSON.stringify(defaultBatches));
+        freshBatches.forEach((batch: any) => {
+          batch.mintedWallets = 0;
+          batch.isSoldOut = false;
+        });
+        await storage.saveBatches(freshBatches);
+        
+        // Reset current batch to 1
+        await storage.saveCurrentBatch({ currentBatch: 1, soldOutAt: null });
+        
+        // Voer nog een verplichte synchronisatie uit om zeker te zijn dat alles klopt
+        await synchronizeBatchCounter(1); // Synchroniseer batch 1
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'FORCE RESET successful - all database tables have been directly truncated and reinitialized' 
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error: any) {
+        console.error('Error during force reset:', error);
+        return new Response(JSON.stringify({ error: 'Failed to force reset all data: ' + error.message }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
