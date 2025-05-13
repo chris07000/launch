@@ -105,7 +105,13 @@ export async function isBatchAvailable(batchId: number): Promise<boolean> {
   const batch = batches.find(b => b.id === batchId);
   if (!batch) return false;
   
-  return batch.mintedWallets < batch.maxWallets;
+  // Als we mintedTigers hebben, gebruik dit om beschikbaarheid te bepalen
+  if (batch.mintedTigers !== undefined && batch.ordinals) {
+    return batch.mintedTigers < batch.ordinals;
+  }
+  
+  // Fallback naar maxWallets check met null check
+  return (batch.mintedWallets < (batch.maxWallets || 33));
 }
 
 /**
@@ -669,16 +675,17 @@ export async function getBatchInfo(batchId: number) {
     
     // Bereken de totale aantal tigers in de batch
     const totalTigers = batch.ordinals;
+    const maxWallets = batch.maxWallets || Math.ceil(totalTigers / 2);
     
     return {
       id: batch.id,
       price: batch.price,
-      maxWallets: batch.maxWallets,
+      maxWallets: maxWallets,
       mintedWallets: batch.mintedWallets,
       mintedTigers: mintedTigers,
       totalTigers: totalTigers,
       availableTigers: totalTigers - mintedTigers,
-      available: batch.maxWallets - batch.mintedWallets,
+      available: maxWallets - batch.mintedWallets,
       isSoldOut: batch.isSoldOut,
       ordinals: batch.ordinals
     };
