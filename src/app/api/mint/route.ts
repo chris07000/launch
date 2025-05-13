@@ -37,7 +37,19 @@ async function getBatchInfo(batchId: number) {
     throw new Error(`Batch #${batchId} not found`);
   }
   
-  return { batch };
+  // Bereken het aantal geminte tigers als het niet direct beschikbaar is
+  const mintedTigers = batch.mintedTigers !== undefined 
+    ? batch.mintedTigers 
+    : batch.mintedWallets * 2;
+  
+  // Voeg mintedTigers toe aan de batch info
+  const batchInfo = {
+    ...batch,
+    mintedTigers,
+    totalTigers: batch.ordinals
+  };
+  
+  return { batch: batchInfo };
 }
 
 // Function to get all batches

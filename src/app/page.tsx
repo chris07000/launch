@@ -10,6 +10,8 @@ export default function HomePage() {
   const [isMobile, setIsMobile] = useState(false);
   const [currentBatch, setCurrentBatch] = useState<number>(1);
   const [mintedWallets, setMintedWallets] = useState<number>(0);
+  const [mintedTigers, setMintedTigers] = useState<number>(0);
+  const [totalTigers, setTotalTigers] = useState<number>(66);
   const [loading, setLoading] = useState(true);
   const [isSoldOut, setIsSoldOut] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -70,6 +72,15 @@ export default function HomePage() {
         if (data && Array.isArray(data.batches)) {
           const currentBatchData = data.batches.find((b: { id: number }) => b.id === currentBatch);
           setMintedWallets(currentBatchData?.mintedWallets || 0);
+          
+          // Update tigers count
+          const tigers = currentBatchData?.mintedTigers !== undefined 
+            ? currentBatchData.mintedTigers 
+            : (currentBatchData?.mintedWallets || 0) * 2;
+          setMintedTigers(tigers);
+          
+          // Total tigers is ordinals property
+          setTotalTigers(currentBatchData?.ordinals || 66);
         }
         
         setLoading(false);
@@ -384,7 +395,7 @@ export default function HomePage() {
                     color: '#fff',
                     textShadow: '0 0 10px rgba(255, 215, 0, 0.5)'
                   }}>
-                    {loading ? '...' : `${mintedWallets}/66`}
+                    {loading ? '...' : `${mintedTigers}/${totalTigers}`}
                   </div>
                 </div>
               </div>
@@ -427,7 +438,7 @@ export default function HomePage() {
                   overflow: 'hidden'
                 }}>
                   <div style={{ 
-                    width: `${loading ? 0 : (mintedWallets / 66) * 100}%`,
+                    width: `${loading ? 0 : (mintedTigers / totalTigers) * 100}%`,
                     height: '100%',
                     backgroundColor: isSoldOut ? '#ff0000' : '#ffd700',
                     transition: 'width 0.5s ease-in-out, background-color 0.3s ease'
