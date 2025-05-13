@@ -1,36 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
 import * as storage from '@/lib/storage-wrapper-db-only';
+import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
 
-// Voeg een helper functie toe voor CORS headers
+interface CurrentBatchResponse {
+  currentBatch: number;
+  totalTigers: number;
+  mintedTigers: number;
+  availableTigers: number;
+  soldOut: boolean;
+  soldOutAt: number | null;
+  timeLeft: number;
+  cooldownDuration: number;
+}
+
+// Helper function for CORS headers
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   };
 }
 
-// Voeg OPTIONS handler toe voor preflight requests
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: corsHeaders(),
-  });
+export async function GET(request: NextRequest) {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: corsHeaders()
+    });
+  }
+
+  // Get current batch information
+  try {
+    const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
+    const batches = await storage.getBatches();
+    const currentBatchInfo = batches.find((b: any) => b.id === currentBatch);
+    
+    // Handle case where current batch is not found
+    if (!currentBatchInfo) {
+      return NextResponse.json({ 
+        error: `Current batch #${currentBatch} not found` 
+      }, { 
+        status: 404,
+        headers: corsHeaders()
+      });
+    }
+    
+    // Calculate time left
+    let timeLeft = 0;
+    let cooldownDuration = 900000; // Default to 15 minutes
+    
+    if (soldOutAt) {
+      cooldownDuration = await getBatchCooldownMilliseconds(currentBatch);
+      const now = Date.now();
+      timeLeft = Math.max(0, cooldownDuration - (now - soldOutAt));
+    }
+    
+    // Calculate total and minted tigers for the current batch
+    const totalTigers = currentBatchInfo.ordinals || 66;
+    
+    // Voor backward compatibility, check eerst op mintedTigers en val terug op mintedWallets * 2
+    const mintedTigers = currentBatchInfo.mintedTigers !== undefined
+      ? currentBatchInfo.mintedTigers
+      : currentBatchInfo.mintedWallets * 2;
+      
+    const availableTigers = totalTigers - mintedTigers;
+    
+    const response: CurrentBatchResponse = {
+      currentBatch: currentBatch,
+      totalTigers: totalTigers,
+      mintedTigers: mintedTigers,
+      availableTigers: availableTigers,
+      soldOut: !!soldOutAt,
+      soldOutAt: soldOutAt,
+      timeLeft: timeLeft,
+      cooldownDuration: cooldownDuration
+    };
+    
+    return NextResponse.json(response, {
+      headers: corsHeaders()
+    });
+  } catch (error) {
+    console.error('Error fetching current batch info:', error);
+    return NextResponse.json({ error: 'Failed to fetch current batch' }, { status: 500 });
+  }
 }
 
-interface CurrentBatchResponse {
-  currentBatch: number;
-  price: number;
-  mintedTigers: number;      // Aantal geminte tigers
-  totalTigers: number;       // Totaal aantal tigers in batch
-  availableTigers: number;   // Beschikbare tigers
-  soldOut: boolean;
-}
-
-// Function to get cooldown settings for a specific batch
+// Helper function to get cooldown duration for a specific batch
 async function getBatchCooldownMilliseconds(batchId: number): Promise<number> {
   try {
     // First, try to get batch-specific cooldown
@@ -57,14 +116,12 @@ async function getBatchCooldownMilliseconds(batchId: number): Promise<number> {
       return convertToMilliseconds(cooldown_value, cooldown_unit);
     }
     
-    // Fall back to 2 dagen (48 uur) if nothing is configured
-    const twoDaysInMilliseconds = 2 * 24 * 60 * 60 * 1000; // 2 dagen in milliseconds
-    return twoDaysInMilliseconds;
+    // Fall back to 15 minutes if nothing is configured
+    return 15 * 60 * 1000; // 15 minutes in milliseconds
   } catch (error) {
     console.error('Error getting batch cooldown:', error);
-    // Default to 2 dagen in case of error
-    const twoDaysInMilliseconds = 2 * 24 * 60 * 60 * 1000; // 2 dagen in milliseconds
-    return twoDaysInMilliseconds;
+    // Default to 15 minutes in case of error
+    return 15 * 60 * 1000; // 15 minutes in milliseconds
   }
 }
 
@@ -79,83 +136,6 @@ function convertToMilliseconds(value: number, unit: string): number {
       return value * 24 * 60 * 60 * 1000;
     default:
       return value * 60 * 1000; // Default to minutes
-  }
-}
-
-export async function GET() {
-  try {
-    // Get current batch ID
-    const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
-    
-    // Get all batches
-    const batches = await storage.getBatches();
-    
-    // Find current batch details
-    const currentBatchInfo = batches.find(b => b.id === currentBatch);
-    
-    if (!currentBatchInfo) {
-      return NextResponse.json({
-        error: `Current batch #${currentBatch} not found`
-      }, { 
-        status: 404,
-        headers: corsHeaders()
-      });
-    }
-    
-    // Bereken het aantal tigers
-    const mintedTigers = currentBatchInfo.mintedTigers !== undefined 
-      ? currentBatchInfo.mintedTigers 
-      : currentBatchInfo.mintedWallets * 2;
-    
-    const totalTigers = currentBatchInfo.ordinals;
-    const availableTigers = totalTigers - mintedTigers;
-    
-    const response: CurrentBatchResponse = {
-      currentBatch: currentBatchInfo.id,
-      price: currentBatchInfo.price,
-      mintedTigers: mintedTigers,
-      totalTigers: totalTigers,
-      availableTigers: availableTigers,
-      soldOut: currentBatchInfo.isSoldOut
-    };
-    
-    if (soldOutAt) {
-      // Get cooldown duration from database for this batch
-      const cooldownDuration = await getBatchCooldownMilliseconds(currentBatch);
-      
-      const now = Date.now();
-      const cooldownEnd = soldOutAt + cooldownDuration;
-      const timeLeft = Math.max(0, cooldownEnd - now);
-      
-      return NextResponse.json({
-        ...response,
-        batches,
-        soldOut: true,
-        soldOutAt,
-        cooldownEnd,
-        timeLeft,
-        nextBatch: currentBatch + 1,
-        cooldownDuration, // Include cooldown duration in response for transparency
-      }, {
-        headers: corsHeaders()
-      });
-    }
-    
-    return NextResponse.json({
-      ...response,
-      batches
-    }, {
-      headers: corsHeaders()
-    });
-  } catch (error) {
-    console.error('Error fetching current batch:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch current batch',
-      message: error instanceof Error ? error.message : String(error)
-    }, { 
-      status: 500,
-      headers: corsHeaders()
-    });
   }
 }
 

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as storage from '@/lib/storage-wrapper-db-only';
 
 export const dynamic = 'force-dynamic';
@@ -11,12 +11,23 @@ function usdToBtc(usdAmount: number): number {
   return usdAmount / BTC_TO_USD_RATE;
 }
 
-// Voeg een helper functie toe voor CORS headers
+// Helper function for getting current batch ID
+async function getCurrentBatchId(): Promise<number> {
+  try {
+    const { currentBatch } = await storage.getCurrentBatch();
+    return currentBatch;
+  } catch (error) {
+    console.error('Error getting current batch ID:', error);
+    return 1; // Fallback to batch 1
+  }
+}
+
+// Helper function for CORS headers
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   };
 }
 
@@ -126,42 +137,33 @@ async function createMintOrder(btcAddress: string, quantity: number, batchId: nu
 
 export async function GET(request: NextRequest) {
   try {
-    // Haal de batchId uit de URL als die er is
-    const { searchParams } = new URL(request.url);
-    const batchId = searchParams.get('batchId');
+    const batches = await storage.getBatches();
+    const currentBatchId = await getCurrentBatchId();
     
-    if (batchId) {
-      // Specifieke batch informatie ophalen
-      const batchInfo = await getBatchInfo(parseInt(batchId, 10));
-      return new Response(JSON.stringify(batchInfo), {
-        status: 200,
-        headers: { 
-          'Content-Type': 'application/json',
-          ...corsHeaders()
-        }
-      });
-    } else {
-      // Alle batches ophalen
-      const allBatches = await getAllBatches();
-      return new Response(JSON.stringify(allBatches), {
-        status: 200,
-        headers: { 
-          'Content-Type': 'application/json',
-          ...corsHeaders()
-        }
-      });
-    }
-  } catch (error: any) {
-    // Error handling
-    const errorMessage = error.message || 'Something went wrong';
-    console.error('GET /api/mint error:', errorMessage);
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 400,
-      headers: { 
-        'Content-Type': 'application/json',
-        ...corsHeaders()
-      }
+    // Process batch data for response
+    const processedBatches = batches.map(batch => {
+      // Ensure we have mintedTigers value - prefer direct value if available
+      const mintedTigers = batch.mintedTigers !== undefined
+        ? batch.mintedTigers
+        : batch.mintedWallets * 2;
+      
+      // Voeg mintedTigers toe aan de batch info
+      return {
+        ...batch,
+        mintedTigers,
+        isActive: batch.id === currentBatchId
+      };
     });
+
+    return NextResponse.json({
+      currentBatch: currentBatchId,
+      batches: processedBatches
+    });
+  } catch (error) {
+    console.error('Error in /api/mint route:', error);
+    return NextResponse.json({
+      error: 'Failed to load mint data'
+    }, { status: 500 });
   }
 }
 
