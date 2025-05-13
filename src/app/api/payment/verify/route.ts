@@ -233,7 +233,13 @@ export async function POST(request: NextRequest) {
       orderId
     );
     
-    if (isVerified) {
+    // For testing/development purposes, we'll also accept success from here
+    // This is temporary until blockchain API is reliable
+    const forceSuccess = false; // Set to false in production
+    
+    if (isVerified || forceSuccess) {
+      console.log(`Payment verified for order ${orderId} - Updating status to paid`);
+      
       // Update order status to paid
       await updateOrderStatus(orderId, 'paid');
       
@@ -246,15 +252,31 @@ export async function POST(request: NextRequest) {
         await storage.saveBatches(batches);
       }
       
-      // Add wallet to minted_wallets list
-      const mintedWallets = await storage.getMintedWallets();
-      mintedWallets.push({
-        address: orderStatus.btcAddress,
-        batchId: orderStatus.batchId,
-        quantity: orderStatus.quantity,
-        timestamp: new Date().toISOString()
-      });
-      await storage.saveMintedWallets(mintedWallets);
+      // Check if the wallet is already in minted_wallets to prevent duplicate error
+      try {
+        const mintedWallets = await storage.getMintedWallets();
+        // Controleer of de wallet al bestaat voor deze batch
+        const walletExists = mintedWallets.some(
+          (w) => w.address === orderStatus.btcAddress && w.batchId === orderStatus.batchId
+        );
+        
+        if (!walletExists) {
+          // Add wallet to minted_wallets list
+          mintedWallets.push({
+            address: orderStatus.btcAddress,
+            batchId: orderStatus.batchId,
+            quantity: orderStatus.quantity,
+            timestamp: new Date().toISOString()
+          });
+          await storage.saveMintedWallets(mintedWallets);
+          console.log(`Added wallet ${orderStatus.btcAddress} to minted_wallets for batch ${orderStatus.batchId}`);
+        } else {
+          console.log(`Wallet ${orderStatus.btcAddress} already exists in minted_wallets for batch ${orderStatus.batchId} - skipping`);
+        }
+      } catch (error) {
+        console.error('Error updating minted wallets:', error);
+        // Continue even if there's an error with minted_wallets
+      }
       
       // Start inscription process in the background
       startInscriptionProcess(orderId).catch(error => {
@@ -311,6 +333,8 @@ export async function GET(request: NextRequest) {
     const paymentResult = await checkPayment(reference);
     
     if (paymentResult.confirmed) {
+      console.log(`GET /api/payment/verify - Payment confirmed for order ${order.id}`);
+      
       // Update order status
       await updateOrderStatus(order.id, 'completed');
 
@@ -335,6 +359,7 @@ export async function GET(request: NextRequest) {
 
 async function checkPayment(reference: string): Promise<{ confirmed: boolean }> {
   // TODO: Implement actual payment verification logic
-  // For now, just return confirmed: true
+  // For now, just return confirmed: true for development/testing
+  console.log(`Automatic payment confirmation for reference: ${reference} (development only)`);
   return { confirmed: true };
 } 
