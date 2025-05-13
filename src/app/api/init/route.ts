@@ -12,6 +12,12 @@ type Step = {
   [key: string]: any; // Allow additional properties
 };
 
+// Standaard cooldown waarde (2 dagen)
+const DEFAULT_COOLDOWN = {
+  value: 2,
+  unit: 'days'
+};
+
 export async function GET(request: NextRequest) {
   const steps: Step[] = [];
   const isVercel = process.env.VERCEL === '1';
@@ -88,6 +94,61 @@ export async function GET(request: NextRequest) {
     } catch (error: any) {
       steps.push({ 
         step: 'Check batches', 
+        status: 'error',
+        error: error.message 
+      });
+    }
+    
+    // Step 4: Initialize cooldown settings to 2 days if needed
+    try {
+      // Check if batch_cooldowns table exists, create if not
+      await sql`
+        CREATE TABLE IF NOT EXISTS batch_cooldowns (
+          batch_id TEXT PRIMARY KEY,
+          cooldown_value INTEGER NOT NULL,
+          cooldown_unit TEXT NOT NULL
+        )
+      `;
+      
+      // Check if default cooldown exists
+      const { rows } = await sql`SELECT * FROM batch_cooldowns WHERE batch_id = 'default'`;
+      
+      if (rows.length === 0) {
+        // Insert default cooldown (2 dagen)
+        await sql`
+          INSERT INTO batch_cooldowns (batch_id, cooldown_value, cooldown_unit)
+          VALUES ('default', ${DEFAULT_COOLDOWN.value}, ${DEFAULT_COOLDOWN.unit})
+        `;
+        steps.push({ 
+          step: 'Initialize default cooldown', 
+          status: 'success',
+          value: `${DEFAULT_COOLDOWN.value} ${DEFAULT_COOLDOWN.unit}` 
+        });
+      } else {
+        // Update to 2 days if it's set to 15 minutes (the old default)
+        if (rows[0].cooldown_value === 15 && rows[0].cooldown_unit === 'minutes') {
+          await sql`
+            UPDATE batch_cooldowns
+            SET cooldown_value = ${DEFAULT_COOLDOWN.value}, cooldown_unit = ${DEFAULT_COOLDOWN.unit}
+            WHERE batch_id = 'default'
+          `;
+          steps.push({ 
+            step: 'Update default cooldown', 
+            status: 'success',
+            value: `${DEFAULT_COOLDOWN.value} ${DEFAULT_COOLDOWN.unit}`,
+            previous: `${rows[0].cooldown_value} ${rows[0].cooldown_unit}`
+          });
+        } else {
+          steps.push({ 
+            step: 'Check default cooldown', 
+            status: 'success',
+            value: `${rows[0].cooldown_value} ${rows[0].cooldown_unit}`
+          });
+        }
+      }
+    } catch (error: any) {
+      steps.push({ 
+        step: 'Configure cooldown', 
         status: 'error',
         error: error.message 
       });

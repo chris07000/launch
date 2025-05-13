@@ -12,6 +12,12 @@ interface CooldownSettings {
   [key: string]: CooldownSetting;
 }
 
+// Standaard cooldown waarde (2 dagen in plaats van 15 minuten)
+const DEFAULT_COOLDOWN = {
+  value: 2,
+  unit: 'days' as 'minutes' | 'hours' | 'days'
+};
+
 // Haal de cooldown instellingen op uit de database
 async function getCooldownSettings(): Promise<CooldownSettings> {
   try {
@@ -29,7 +35,7 @@ async function getCooldownSettings(): Promise<CooldownSettings> {
     
     // Convert to the expected format
     const settings: CooldownSettings = {
-      default: { value: 15, unit: 'minutes' } // Default fallback
+      default: DEFAULT_COOLDOWN // Standaard is nu 2 dagen
     };
     
     rows.forEach(row => {
@@ -41,20 +47,20 @@ async function getCooldownSettings(): Promise<CooldownSettings> {
     
     // Ensure default setting exists
     if (!settings.default) {
-      // Insert default if not present
+      // Insert default if not present (2 dagen)
       await sql`
         INSERT INTO batch_cooldowns (batch_id, cooldown_value, cooldown_unit)
-        VALUES ('default', 15, 'minutes')
+        VALUES ('default', ${DEFAULT_COOLDOWN.value}, ${DEFAULT_COOLDOWN.unit})
         ON CONFLICT (batch_id) DO NOTHING
       `;
-      settings.default = { value: 15, unit: 'minutes' };
+      settings.default = DEFAULT_COOLDOWN;
     }
     
     return settings;
   } catch (error) {
     console.error('Error fetching cooldown settings:', error);
-    // Return default value if there's an error
-    return { default: { value: 15, unit: 'minutes' } };
+    // Return default value if there's an error (2 dagen)
+    return { default: DEFAULT_COOLDOWN };
   }
 }
 
@@ -136,10 +142,10 @@ export async function DELETE(request: Request) {
     }
     
     if (batchId === 'default') {
-      // Don't delete default, just reset to default values
+      // Don't delete default, just reset to default values (2 dagen)
       await sql`
         UPDATE batch_cooldowns
-        SET cooldown_value = 15, cooldown_unit = 'minutes'
+        SET cooldown_value = ${DEFAULT_COOLDOWN.value}, cooldown_unit = ${DEFAULT_COOLDOWN.unit}
         WHERE batch_id = 'default'
       `;
     } else {

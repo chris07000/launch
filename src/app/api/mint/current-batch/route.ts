@@ -56,12 +56,14 @@ async function getBatchCooldownMilliseconds(batchId: number): Promise<number> {
       return convertToMilliseconds(cooldown_value, cooldown_unit);
     }
     
-    // Fall back to 15 minutes if nothing is configured
-    return 15 * 60 * 1000; // 15 minutes in milliseconds
+    // Fall back to 2 dagen (48 uur) if nothing is configured
+    const twoDaysInMilliseconds = 2 * 24 * 60 * 60 * 1000; // 2 dagen in milliseconds
+    return twoDaysInMilliseconds;
   } catch (error) {
     console.error('Error getting batch cooldown:', error);
-    // Default to 15 minutes in case of error
-    return 15 * 60 * 1000;
+    // Default to 2 dagen in case of error
+    const twoDaysInMilliseconds = 2 * 24 * 60 * 60 * 1000; // 2 dagen in milliseconds
+    return twoDaysInMilliseconds;
   }
 }
 
