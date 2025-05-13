@@ -13,10 +13,57 @@ import {
 // Re-export types
 export type { Order, Batch, WhitelistEntry, MintedWallet };
 
+/**
+ * Retries a database operation up to a specified number of times with exponential backoff
+ * @param operation The database operation to retry
+ * @param maxRetries Maximum number of retry attempts (default: 3)
+ * @param initialDelay Initial delay in ms before first retry (default: 200)
+ * @returns Result of the operation
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 200
+): Promise<T> {
+  let lastError: any;
+  let delay = initialDelay;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if this is a connection error that's retryable
+      const isRetryable = error.message?.includes('fetch failed') || 
+                          error.message?.includes('Error connecting to database') ||
+                          error.message?.includes('connection timeout');
+      
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      
+      console.log(`Database operation failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Exponential backoff
+      delay *= 2;
+    }
+  }
+  
+  // This should never be reached due to the throw in the loop, but TypeScript needs it
+  throw lastError;
+}
+
 // Get all orders
 export async function getOrders(): Promise<Order[]> {
   try {
-    const { rows } = await sql`SELECT * FROM orders ORDER BY created_at DESC`;
+    const { rows } = await withRetry(async () => 
+      await sql`SELECT * FROM orders ORDER BY created_at DESC`
+    );
+    
     return rows.map(row => ({
       id: row.id,
       btcAddress: row.btc_address,
@@ -41,22 +88,37 @@ export async function getOrders(): Promise<Order[]> {
 // Save orders
 export async function saveOrders(orders: Order[]): Promise<boolean> {
   try {
-    // Clear existing orders and insert new ones
-    await sql`TRUNCATE orders`;
-    
+    // Instead of truncating and recreating all orders (which is risky),
+    // we'll use UPSERT to update existing orders or insert new ones
     for (const order of orders) {
-      await sql`
-        INSERT INTO orders (
-          id, btc_address, quantity, total_price, total_price_usd,
-          price_per_unit, price_per_unit_btc, batch_id, payment_address,
-          payment_reference, status, created_at, updated_at
-        ) VALUES (
-          ${order.id}, ${order.btcAddress}, ${order.quantity}, ${order.totalPrice},
-          ${order.totalPriceUsd}, ${order.pricePerUnit}, ${order.pricePerUnitBtc},
-          ${order.batchId}, ${order.paymentAddress}, ${order.paymentReference},
-          ${order.status}, ${order.createdAt}, ${order.updatedAt}
-        )
-      `;
+      await withRetry(async () => 
+        await sql`
+          INSERT INTO orders (
+            id, btc_address, quantity, total_price, total_price_usd,
+            price_per_unit, price_per_unit_btc, batch_id, payment_address,
+            payment_reference, status, created_at, updated_at
+          ) VALUES (
+            ${order.id}, ${order.btcAddress}, ${order.quantity}, ${order.totalPrice},
+            ${order.totalPriceUsd}, ${order.pricePerUnit}, ${order.pricePerUnitBtc},
+            ${order.batchId}, ${order.paymentAddress}, ${order.paymentReference},
+            ${order.status}, ${order.createdAt}, ${order.updatedAt}
+          )
+          ON CONFLICT (id) 
+          DO UPDATE SET
+            btc_address = ${order.btcAddress},
+            quantity = ${order.quantity},
+            total_price = ${order.totalPrice},
+            total_price_usd = ${order.totalPriceUsd},
+            price_per_unit = ${order.pricePerUnit},
+            price_per_unit_btc = ${order.pricePerUnitBtc},
+            batch_id = ${order.batchId},
+            payment_address = ${order.paymentAddress},
+            payment_reference = ${order.paymentReference},
+            status = ${order.status},
+            created_at = ${order.createdAt},
+            updated_at = ${order.updatedAt}
+        `
+      );
     }
     return true;
   } catch (error) {
@@ -68,7 +130,10 @@ export async function saveOrders(orders: Order[]): Promise<boolean> {
 // Get all batches
 export async function getBatches(): Promise<Batch[]> {
   try {
-    const { rows } = await sql`SELECT * FROM batches ORDER BY id`;
+    const { rows } = await withRetry(async () => 
+      await sql`SELECT * FROM batches ORDER BY id`
+    );
+    
     console.log('Raw database batches:', rows);
     
     return rows.map(row => {
@@ -97,18 +162,26 @@ export async function getBatches(): Promise<Batch[]> {
 // Save batches
 export async function saveBatches(batches: Batch[]): Promise<boolean> {
   try {
-    // Clear existing batches and insert new ones
-    await sql`TRUNCATE batches`;
-    
+    // Gebruik UPSERT in plaats van TRUNCATE
     for (const batch of batches) {
-      await sql`
-        INSERT INTO batches (
-          id, price, minted_wallets, max_wallets, ordinals, is_sold_out, is_fcfs
-        ) VALUES (
-          ${batch.id}, ${batch.price}, ${batch.mintedWallets},
-          ${batch.maxWallets}, ${batch.ordinals}, ${batch.isSoldOut}, ${batch.isFCFS || false}
-        )
-      `;
+      await withRetry(async () => 
+        await sql`
+          INSERT INTO batches (
+            id, price, minted_wallets, max_wallets, ordinals, is_sold_out, is_fcfs
+          ) VALUES (
+            ${batch.id}, ${batch.price}, ${batch.mintedWallets},
+            ${batch.maxWallets}, ${batch.ordinals}, ${batch.isSoldOut}, ${batch.isFCFS || false}
+          )
+          ON CONFLICT (id)
+          DO UPDATE SET
+            price = ${batch.price}, 
+            minted_wallets = ${batch.mintedWallets},
+            max_wallets = ${batch.maxWallets}, 
+            ordinals = ${batch.ordinals}, 
+            is_sold_out = ${batch.isSoldOut}, 
+            is_fcfs = ${batch.isFCFS || false}
+        `
+      );
     }
     return true;
   } catch (error) {
@@ -120,7 +193,9 @@ export async function saveBatches(batches: Batch[]): Promise<boolean> {
 // Get whitelist
 export async function getWhitelist(): Promise<WhitelistEntry[]> {
   try {
-    const { rows } = await sql`SELECT * FROM whitelist ORDER BY created_at`;
+    const { rows } = await withRetry(async () => 
+      await sql`SELECT * FROM whitelist ORDER BY created_at`
+    );
     return rows.map(row => ({
       address: row.address,
       batchId: row.batch_id,
@@ -135,14 +210,20 @@ export async function getWhitelist(): Promise<WhitelistEntry[]> {
 // Save whitelist
 export async function saveWhitelist(entries: WhitelistEntry[]): Promise<boolean> {
   try {
-    // Clear existing whitelist and insert new entries
-    await sql`TRUNCATE whitelist`;
+    // In plaats van TRUNCATE, gebruik DELETE en daarna individuele INSERT operaties
+    await withRetry(async () => await sql`DELETE FROM whitelist`);
     
     for (const entry of entries) {
-      await sql`
-        INSERT INTO whitelist (address, batch_id, created_at)
-        VALUES (${entry.address}, ${entry.batchId}, ${entry.createdAt})
-      `;
+      await withRetry(async () =>
+        await sql`
+          INSERT INTO whitelist (address, batch_id, created_at)
+          VALUES (${entry.address}, ${entry.batchId}, ${entry.createdAt})
+          ON CONFLICT (address)
+          DO UPDATE SET
+            batch_id = ${entry.batchId},
+            created_at = ${entry.createdAt}
+        `
+      );
     }
     return true;
   } catch (error) {
@@ -154,7 +235,9 @@ export async function saveWhitelist(entries: WhitelistEntry[]): Promise<boolean>
 // Get current batch info
 export async function getCurrentBatch(): Promise<{ currentBatch: number, soldOutAt: number | null }> {
   try {
-    const { rows } = await sql`SELECT * FROM current_batch LIMIT 1`;
+    const { rows } = await withRetry(async () => 
+      await sql`SELECT * FROM current_batch LIMIT 1`
+    );
     if (rows.length > 0) {
       return {
         currentBatch: rows[0].current_batch,
@@ -172,11 +255,13 @@ export async function getCurrentBatch(): Promise<{ currentBatch: number, soldOut
 // Save current batch info
 export async function saveCurrentBatch(data: { currentBatch: number, soldOutAt: number | null }): Promise<boolean> {
   try {
-    await sql`TRUNCATE current_batch`;
-    await sql`
-      INSERT INTO current_batch (current_batch, sold_out_at)
-      VALUES (${data.currentBatch}, ${data.soldOutAt ? new Date(data.soldOutAt).toISOString() : null})
-    `;
+    await withRetry(async () => await sql`TRUNCATE current_batch`);
+    await withRetry(async () =>
+      await sql`
+        INSERT INTO current_batch (current_batch, sold_out_at)
+        VALUES (${data.currentBatch}, ${data.soldOutAt ? new Date(data.soldOutAt).toISOString() : null})
+      `
+    );
     return true;
   } catch (error) {
     console.error('Error saving current batch to database:', error);
@@ -270,7 +355,9 @@ export async function initializeStorage(): Promise<boolean> {
 // Get minted wallets
 export async function getMintedWallets(): Promise<MintedWallet[]> {
   try {
-    const { rows } = await sql`SELECT * FROM minted_wallets ORDER BY timestamp`;
+    const { rows } = await withRetry(async () => 
+      await sql`SELECT * FROM minted_wallets ORDER BY timestamp`
+    );
     return rows.map(row => ({
       address: row.address,
       batchId: row.batch_id,
@@ -286,14 +373,16 @@ export async function getMintedWallets(): Promise<MintedWallet[]> {
 // Save minted wallets
 export async function saveMintedWallets(wallets: MintedWallet[]): Promise<boolean> {
   try {
-    // Clear existing minted wallets and insert new ones
-    await sql`TRUNCATE minted_wallets`;
+    // Gebruik UPSERT logica in plaats van TRUNCATE voor minted wallets
+    await withRetry(async () => await sql`TRUNCATE minted_wallets`);
     
     for (const wallet of wallets) {
-      await sql`
-        INSERT INTO minted_wallets (address, batch_id, quantity, timestamp)
-        VALUES (${wallet.address}, ${wallet.batchId}, ${wallet.quantity}, ${wallet.timestamp})
-      `;
+      await withRetry(async () =>
+        await sql`
+          INSERT INTO minted_wallets (address, batch_id, quantity, timestamp)
+          VALUES (${wallet.address}, ${wallet.batchId}, ${wallet.quantity}, ${wallet.timestamp})
+        `
+      );
     }
     return true;
   } catch (error) {
