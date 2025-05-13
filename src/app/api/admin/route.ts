@@ -1,6 +1,7 @@
 import * as storage from '@/lib/storage-wrapper-db-only';
 import { Batch, WhitelistEntry } from '@/lib/types';
 import { synchronizeBatchCounter } from '@/app/api/payment/verify/route';
+import { sql } from '@vercel/postgres';
 
 // Define default batches
 const defaultBatches = [
@@ -543,6 +544,64 @@ export async function POST(request: Request) {
         console.error('Error fixing batch 1:', error);
         return new Response(JSON.stringify({ error: 'Failed to fix batch 1' }), {
           status: 500, 
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    // Volledige data reset die alles wist inclusief transactiegeschiedenis
+    else if (action === 'reset-all-data') {
+      try {
+        console.log('COMPLETE DATA RESET: Resetting all application data...');
+        
+        // Reset orders
+        await storage.saveOrders([]);
+        console.log('Orders reset successfully');
+        
+        // Reset minted wallets
+        await storage.saveMintedWallets([]);
+        console.log('Minted wallets reset successfully');
+        
+        // Reset whitelist
+        await storage.saveWhitelist([]);
+        console.log('Whitelist reset successfully');
+        
+        // Reset batches to default state met 0 mintedWallets
+        // Maak een diepe kopie van de defaultBatches om te zorgen dat we originele waarden gebruiken
+        const freshBatches = JSON.parse(JSON.stringify(defaultBatches));
+        
+        // Zorg ervoor dat mintedWallets op 0 staat voor alle batches
+        freshBatches.forEach((batch: any) => {
+          batch.mintedWallets = 0;
+          batch.isSoldOut = false;
+        });
+        
+        await storage.saveBatches(freshBatches);
+        console.log('Batches reset to default values successfully');
+        
+        // Reset current batch to 1
+        await storage.saveCurrentBatch({ currentBatch: 1, soldOutAt: null });
+        console.log('Current batch reset to 1 successfully');
+        
+        // Reset transaction history in database door de tabel te legen
+        try {
+          await sql`TRUNCATE used_transactions`;
+          console.log('Transaction history cleared successfully');
+        } catch (sqlError) {
+          console.error('Error clearing transaction history:', sqlError);
+          // Fail silently, this isn't critical
+        }
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Complete data reset successful - all application data has been reset to initial state' 
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error: any) {
+        console.error('Error during complete data reset:', error);
+        return new Response(JSON.stringify({ error: 'Failed to reset all data' }), {
+          status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
       }
