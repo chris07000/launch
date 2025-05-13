@@ -1,143 +1,156 @@
 import { NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs/promises';
+import { sql } from '@vercel/postgres';
 
-const COOLDOWN_FILE_PATH = path.join(process.cwd(), 'data', 'batch-cooldown.json');
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'default_password';
+export const dynamic = 'force-dynamic';
 
-interface CooldownSettings {
+interface CooldownSetting {
   value: number;
   unit: 'minutes' | 'hours' | 'days';
 }
 
-interface BatchCooldownSettings {
-  [batchId: string]: CooldownSettings;
-  default: CooldownSettings;
+interface CooldownSettings {
+  [key: string]: CooldownSetting;
 }
 
-export async function POST(request: Request) {
+// Haal de cooldown instellingen op uit de database
+async function getCooldownSettings(): Promise<CooldownSettings> {
   try {
-    const { value, unit, password, batchId } = await request.json();
-
-    // Validate password
-    if (password !== ADMIN_PASSWORD) {
-      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
-    }
-
-    // Validate cooldown time
-    if (!value || value < 1) {
-      return NextResponse.json({ error: 'Invalid cooldown value. Must be at least 1.' }, { status: 400 });
-    }
-
-    // Validate and convert to minutes
-    let cooldownMinutes: number;
-    switch (unit) {
-      case 'minutes':
-        if (value > 60) return NextResponse.json({ error: 'Maximum 60 minutes allowed' }, { status: 400 });
-        cooldownMinutes = value;
-        break;
-      case 'hours':
-        if (value > 24) return NextResponse.json({ error: 'Maximum 24 hours allowed' }, { status: 400 });
-        cooldownMinutes = value * 60;
-        break;
-      case 'days':
-        if (value > 7) return NextResponse.json({ error: 'Maximum 7 days allowed' }, { status: 400 });
-        cooldownMinutes = value * 24 * 60;
-        break;
-      default:
-        return NextResponse.json({ error: 'Invalid time unit' }, { status: 400 });
-    }
-
-    // Load existing settings or create default
-    let settings: BatchCooldownSettings;
-    try {
-      const data = await fs.readFile(COOLDOWN_FILE_PATH, 'utf-8');
-      settings = JSON.parse(data);
-    } catch (error) {
-      settings = {
-        default: { value: 15, unit: 'minutes' }
+    // Check if table exists - if not, create it
+    await sql`
+      CREATE TABLE IF NOT EXISTS batch_cooldowns (
+        batch_id TEXT PRIMARY KEY,
+        cooldown_value INTEGER NOT NULL,
+        cooldown_unit TEXT NOT NULL
+      )
+    `;
+    
+    // Fetch all cooldown settings
+    const { rows } = await sql`SELECT * FROM batch_cooldowns`;
+    
+    // Convert to the expected format
+    const settings: CooldownSettings = {
+      default: { value: 15, unit: 'minutes' } // Default fallback
+    };
+    
+    rows.forEach(row => {
+      settings[row.batch_id] = {
+        value: row.cooldown_value,
+        unit: row.cooldown_unit as 'minutes' | 'hours' | 'days'
       };
+    });
+    
+    // Ensure default setting exists
+    if (!settings.default) {
+      // Insert default if not present
+      await sql`
+        INSERT INTO batch_cooldowns (batch_id, cooldown_value, cooldown_unit)
+        VALUES ('default', 15, 'minutes')
+        ON CONFLICT (batch_id) DO NOTHING
+      `;
+      settings.default = { value: 15, unit: 'minutes' };
     }
-
-    // Update settings for specific batch or default
-    if (batchId) {
-      settings[batchId] = { value, unit };
-    } else {
-      settings.default = { value, unit };
-    }
-
-    // Save cooldown settings
-    await fs.writeFile(COOLDOWN_FILE_PATH, JSON.stringify(settings));
-
-    return NextResponse.json({ success: true });
+    
+    return settings;
   } catch (error) {
-    console.error('Error setting batch cooldown:', error);
-    return NextResponse.json({ error: 'Failed to set batch cooldown' }, { status: 500 });
+    console.error('Error fetching cooldown settings:', error);
+    // Return default value if there's an error
+    return { default: { value: 15, unit: 'minutes' } };
   }
 }
 
-export async function GET(request: Request) {
+// GET handler to retrieve cooldown settings
+export async function GET() {
   try {
-    // Get batchId from query parameters if provided
-    const { searchParams } = new URL(request.url);
-    const batchId = searchParams.get('batchId');
-
-    const data = await fs.readFile(COOLDOWN_FILE_PATH, 'utf-8');
-    const settings: BatchCooldownSettings = JSON.parse(data);
-
-    if (batchId && settings[batchId]) {
-      return NextResponse.json(settings[batchId]);
-    }
-
-    // Return all settings or default if no specific batch requested
+    const settings = await getCooldownSettings();
     return NextResponse.json(settings);
   } catch (error) {
-    // If file doesn't exist or other error, return default values
-    return NextResponse.json({
-      default: { value: 15, unit: 'minutes' }
-    });
+    console.error('Error in GET cooldown settings:', error);
+    return NextResponse.json({ error: 'Failed to retrieve cooldown settings' }, { status: 500 });
   }
 }
 
+// POST handler to update a cooldown setting
+export async function POST(request: Request) {
+  try {
+    const { value, unit, batchId, password } = await request.json();
+    
+    // Validate the request
+    if (!password || password !== process.env.ADMIN_PASSWORD) {
+      return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+    }
+    
+    if (!value || !unit) {
+      return NextResponse.json({ error: 'Value and unit are required' }, { status: 400 });
+    }
+    
+    // Validate the unit
+    if (!['minutes', 'hours', 'days'].includes(unit)) {
+      return NextResponse.json({ error: 'Unit must be one of: minutes, hours, days' }, { status: 400 });
+    }
+    
+    // Convert value to number
+    const numValue = Number(value);
+    
+    // Validate the value based on unit
+    const maxValues = { minutes: 60, hours: 24, days: 7 };
+    if (numValue <= 0 || numValue > maxValues[unit as keyof typeof maxValues]) {
+      return NextResponse.json({ 
+        error: `Value must be between 1 and ${maxValues[unit as keyof typeof maxValues]} for ${unit}` 
+      }, { status: 400 });
+    }
+    
+    // Use 'default' if batchId is null or undefined
+    const targetBatchId = batchId || 'default';
+    
+    // Save to database using UPSERT
+    await sql`
+      INSERT INTO batch_cooldowns (batch_id, cooldown_value, cooldown_unit)
+      VALUES (${targetBatchId}, ${numValue}, ${unit})
+      ON CONFLICT (batch_id) 
+      DO UPDATE SET 
+        cooldown_value = ${numValue},
+        cooldown_unit = ${unit}
+    `;
+    
+    const settings = await getCooldownSettings();
+    return NextResponse.json(settings);
+  } catch (error) {
+    console.error('Error setting batch cooldown:', error);
+    return NextResponse.json({ error: `Error setting batch cooldown: ${error}` }, { status: 500 });
+  }
+}
+
+// DELETE handler to remove a specific cooldown setting
 export async function DELETE(request: Request) {
   try {
-    // Get batchId and password from query parameters
     const { searchParams } = new URL(request.url);
     const batchId = searchParams.get('batchId');
     const password = searchParams.get('password');
-
-    // Validate password
-    if (password !== ADMIN_PASSWORD) {
+    
+    if (!password || password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
     }
-
-    // Load existing settings
-    let settings: BatchCooldownSettings;
-    try {
-      const data = await fs.readFile(COOLDOWN_FILE_PATH, 'utf-8');
-      settings = JSON.parse(data);
-    } catch (error) {
-      settings = {
-        default: { value: 15, unit: 'minutes' }
-      };
+    
+    if (!batchId) {
+      return NextResponse.json({ error: 'Batch ID is required' }, { status: 400 });
     }
-
-    // If batchId is provided, delete that specific setting
-    if (batchId && batchId !== 'default') {
-      delete settings[batchId];
+    
+    if (batchId === 'default') {
+      // Don't delete default, just reset to default values
+      await sql`
+        UPDATE batch_cooldowns
+        SET cooldown_value = 15, cooldown_unit = 'minutes'
+        WHERE batch_id = 'default'
+      `;
     } else {
-      // Reset to default settings
-      settings = {
-        default: { value: 15, unit: 'minutes' }
-      };
+      // Delete the specific batch cooldown
+      await sql`DELETE FROM batch_cooldowns WHERE batch_id = ${batchId}`;
     }
-
-    // Save updated settings
-    await fs.writeFile(COOLDOWN_FILE_PATH, JSON.stringify(settings));
-
-    return NextResponse.json({ success: true });
+    
+    const settings = await getCooldownSettings();
+    return NextResponse.json(settings);
   } catch (error) {
     console.error('Error deleting batch cooldown:', error);
-    return NextResponse.json({ error: 'Failed to delete batch cooldown' }, { status: 500 });
+    return NextResponse.json({ error: `Error deleting batch cooldown: ${error}` }, { status: 500 });
   }
 }

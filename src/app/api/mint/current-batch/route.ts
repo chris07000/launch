@@ -29,6 +29,56 @@ interface CurrentBatchResponse {
   soldOut: boolean;
 }
 
+// Function to get cooldown settings for a specific batch
+async function getBatchCooldownMilliseconds(batchId: number): Promise<number> {
+  try {
+    // First, try to get batch-specific cooldown
+    const { rows: batchSpecific } = await sql`
+      SELECT cooldown_value, cooldown_unit FROM batch_cooldowns 
+      WHERE batch_id = ${batchId.toString()}
+    `;
+    
+    // If batch-specific setting exists, use it
+    if (batchSpecific.length > 0) {
+      const { cooldown_value, cooldown_unit } = batchSpecific[0];
+      return convertToMilliseconds(cooldown_value, cooldown_unit);
+    }
+    
+    // Otherwise, try to get default cooldown
+    const { rows: defaultCooldown } = await sql`
+      SELECT cooldown_value, cooldown_unit FROM batch_cooldowns 
+      WHERE batch_id = 'default'
+    `;
+    
+    // If default setting exists, use it
+    if (defaultCooldown.length > 0) {
+      const { cooldown_value, cooldown_unit } = defaultCooldown[0];
+      return convertToMilliseconds(cooldown_value, cooldown_unit);
+    }
+    
+    // Fall back to 15 minutes if nothing is configured
+    return 15 * 60 * 1000; // 15 minutes in milliseconds
+  } catch (error) {
+    console.error('Error getting batch cooldown:', error);
+    // Default to 15 minutes in case of error
+    return 15 * 60 * 1000;
+  }
+}
+
+// Helper function to convert cooldown settings to milliseconds
+function convertToMilliseconds(value: number, unit: string): number {
+  switch (unit) {
+    case 'minutes':
+      return value * 60 * 1000;
+    case 'hours':
+      return value * 60 * 60 * 1000;
+    case 'days':
+      return value * 24 * 60 * 60 * 1000;
+    default:
+      return value * 60 * 1000; // Default to minutes
+  }
+}
+
 export async function GET() {
   try {
     // Get current batch ID
@@ -58,9 +108,11 @@ export async function GET() {
     };
     
     if (soldOutAt) {
-      // Calculate timeLeft based on 15-minute cooldown
+      // Get cooldown duration from database for this batch
+      const cooldownDuration = await getBatchCooldownMilliseconds(currentBatch);
+      
       const now = Date.now();
-      const cooldownEnd = soldOutAt + 15 * 60 * 1000; // 15 minutes
+      const cooldownEnd = soldOutAt + cooldownDuration;
       const timeLeft = Math.max(0, cooldownEnd - now);
       
       return NextResponse.json({
@@ -70,7 +122,8 @@ export async function GET() {
         soldOutAt,
         cooldownEnd,
         timeLeft,
-        nextBatch: currentBatch + 1
+        nextBatch: currentBatch + 1,
+        cooldownDuration, // Include cooldown duration in response for transparency
       }, {
         headers: corsHeaders()
       });
