@@ -166,21 +166,32 @@ export default function HomePage() {
   }, []); // Only run once on mount
 
   // Format time function
-  const formatTimeLeft = (ms: number) => {
-    if (ms <= 0) return '0s';
+  const formatTimeLeft = (milliseconds: number) => {
+    if (milliseconds <= 0) return "0m 0s";
     
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+    const seconds = Math.floor((milliseconds / 1000) % 60);
+    const minutes = Math.floor((milliseconds / (1000 * 60)) % 60);
+    const hours = Math.floor((milliseconds / (1000 * 60 * 60)) % 24);
+    const days = Math.floor(milliseconds / (1000 * 60 * 60 * 24));
     
-    let timeString = '';
-    if (days > 0) timeString += `${days}d `;
-    if (hours > 0) timeString += `${hours}h `;
-    if (minutes > 0) timeString += `${minutes}m `;
-    timeString += `${seconds}s`;
+    let formattedTime = "";
     
-    return timeString;
+    if (days > 0) {
+      formattedTime += `${days}d `;
+    }
+    
+    if (hours > 0 || days > 0) {
+      formattedTime += `${hours}u `;
+    }
+    
+    formattedTime += `${minutes}m`;
+    
+    // Add seconds only if less than 1 hour remaining
+    if (days === 0 && hours === 0) {
+      formattedTime += ` ${seconds}s`;
+    }
+    
+    return formattedTime;
   };
 
   // Update the wallet check function

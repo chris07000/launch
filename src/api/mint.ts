@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as storage from '../lib/storage-wrapper';
-import { BatchConfig } from '../lib/types';
+import { BatchConfig, Batch } from '../lib/types';
 import { sql } from '@vercel/postgres';
 
 // Check if running in Vercel environment
@@ -105,45 +105,47 @@ export async function isBatchAvailable(batchId: number): Promise<boolean> {
   const batch = batches.find(b => b.id === batchId);
   if (!batch) return false;
   
-  // Als we mintedTigers hebben, gebruik dit om beschikbaarheid te bepalen
+  // Modern approach - check tigers if available
   if (batch.mintedTigers !== undefined && batch.ordinals) {
     return batch.mintedTigers < batch.ordinals;
   }
   
-  // Fallback naar maxWallets check met null check
-  return (batch.mintedWallets < (batch.maxWallets || 33));
+  // Legacy approach - fallback to wallets with null check
+  const maxWallets = batch.maxWallets || 33; // Default to 33 if maxWallets is undefined
+  return batch.mintedWallets < maxWallets;
 }
 
 /**
  * Markeer een batch als sold out en start de timer
  */
-export async function markBatchAsSoldOut(batchId: number) {
-  try {
-    // Get current batch info
-    const currentBatchInfo = await storage.getCurrentBatch();
-    
-    // Mark as sold out with timestamp
-    await storage.saveCurrentBatch({
-      currentBatch: batchId,
-      soldOutAt: Date.now()
-    });
-    
-    // Update batch in batches list
-    const batches = await storage.getBatches();
-    const batchIndex = batches.findIndex(b => b.id === batchId);
-    if (batchIndex !== -1) {
-      batches[batchIndex].isSoldOut = true;
-      await storage.saveBatches(batches);
-      
-      // Log meer details over het aantal tigers
-      const totalMintedTigers = batches[batchIndex].mintedWallets * 2;
-      const totalTigersInBatch = batches[batchIndex].ordinals;
-      console.log(`Batch ${batchId} gemarkeerd als sold out: ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
-    }
-    
-    console.log(`Batch ${batchId} marked as sold out at ${new Date().toISOString()}`);
-  } catch (error) {
-    console.error('Error marking batch as sold out:', error);
+export async function markBatchAsSoldOut(
+  batch: Batch,
+  batches: Batch[],
+  storage: any
+) {
+  if (!batch) return;
+
+  // Mark the batch as sold out
+  batch.isSoldOut = true;
+  
+  // Get the next batch if it exists
+  const nextBatchId = batch.id + 1;
+  const nextBatch = batches.find((b) => b.id === nextBatchId);
+
+  // Save the updated batch status
+  await storage.saveBatches(batches);
+  
+  // Modern approach - use tiger count if available
+  if (batch.mintedTigers !== undefined && batch.ordinals) {
+    console.log(
+      `Batch ${batch.id} has reached its maximum tigers (${batch.ordinals}). Setting to sold out.`
+    );
+  } else {
+    // Legacy approach - use wallet count
+    const maxWallets = batch.maxWallets || 33; // Default to 33 if maxWallets is undefined
+    console.log(
+      `Batch ${batch.id} has reached its maximum wallets (${maxWallets}). Setting to sold out.`
+    );
   }
 }
 
@@ -642,7 +644,7 @@ export async function updateOrderStatus(orderId: string, status: storage.Order['
         if (totalMintedTigers >= totalTigersInBatch) {
           batches[batchIndex].isSoldOut = true;
           console.log(`Batch ${order.batchId} is nu gemarkeerd als sold out (alle ${totalTigersInBatch} tigers zijn gemint)`);
-          await markBatchAsSoldOut(order.batchId);
+          await markBatchAsSoldOut(batches[batchIndex], batches, storage);
         }
         
         await storage.saveBatches(batches);

@@ -77,18 +77,38 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if the batch has reached its max wallets
-    if (batch.mintedWallets >= batch.maxWallets) {
-      // Update batch to sold out if it's not already marked
-      if (!batch.isSoldOut) {
-        batch.isSoldOut = true;
-        await storage.saveBatches(batches);
+    // Eerst op basis van tigers controleren, als dat beschikbaar is
+    if (batch.mintedTigers !== undefined && batch.ordinals) {
+      // Check op basis van tigers (moderner)
+      if (batch.mintedTigers >= batch.ordinals) {
+        // Update batch to sold out if it's not already marked
+        if (!batch.isSoldOut) {
+          batch.isSoldOut = true;
+          await storage.saveBatches(batches);
+        }
+        
+        return NextResponse.json({
+          eligible: false,
+          reason: 'batch_full',
+          message: `Batch #${batchId} has reached maximum tigers (${batch.ordinals})`
+        });
       }
-      
-      return NextResponse.json({
-        eligible: false,
-        reason: 'batch_full',
-        message: `Batch #${batchId} has reached maximum wallets`
-      });
+    } else {
+      // Fallback naar wallets check met null check
+      const maxWallets = batch.maxWallets || 33; // Default naar 33 als maxWallets ontbreekt
+      if (batch.mintedWallets >= maxWallets) {
+        // Update batch to sold out if it's not already marked
+        if (!batch.isSoldOut) {
+          batch.isSoldOut = true;
+          await storage.saveBatches(batches);
+        }
+        
+        return NextResponse.json({
+          eligible: false,
+          reason: 'batch_full',
+          message: `Batch #${batchId} has reached maximum wallets`
+        });
+      }
     }
 
     // If all checks pass, the address is eligible to mint

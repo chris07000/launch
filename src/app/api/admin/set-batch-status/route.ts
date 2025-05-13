@@ -86,17 +86,22 @@ export async function POST(request: Request) {
       console.log(`Current batch ${currentBatch} sold out time is reset`);
     }
     
-    return NextResponse.json({
-      success: true,
-      message: `Batch ${batchId} bijgewerkt: ${oldTigers} → ${actualTigers} tigers ${isSoldOut ? '(UITVERKOCHT)' : ''}`,
-      oldTigers: oldTigers,
-      newTigers: actualTigers,
-      requestedTigers: Number(mintedTigers),
-      totalTigersInBatch: totalTigersInBatch,
-      mintedWallets: newWallets, // Voor backward compatibility (kan later verwijderd worden)
-      isSoldOut: batches[batchIndex].isSoldOut
-      // maxWallets verwijderd omdat we nu tigers tellen
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: `Batch ${batchId} updated to ${mintedWallets} minted wallets and ${mintedTigers} minted tigers`,
+        batch: {
+          id: batchId,
+          oldMintedWallets: batches[batchIndex].mintedWallets,
+          newMintedWallets: newWallets,
+          oldMintedTigers: oldTigers,
+          newMintedTigers: actualTigers,
+          isSoldOut: batches[batchIndex].isSoldOut,
+          totalTigers: batches[batchIndex].ordinals
+        }
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error('Error in set-batch-status:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
