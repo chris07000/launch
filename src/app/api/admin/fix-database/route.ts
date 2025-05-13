@@ -22,40 +22,47 @@ export async function GET(request: Request) {
     
     const fixes: { step: string; status: string; details?: any }[] = [];
     
-    // Fix 1: Reset batch 1 mintedWallets naar exact 33 (66 tigers)
+    // Fix 1: Herstel de tigers telling voor batch 1 naar exact 66/66 tigers
+    // Let op: In de database structuur is er 1 mintedWallet voor elke 2 tigers
+    // Dus als we 66 tigers willen, moeten we mintedWallets op 33 zetten
     try {
       const batches = await storage.getBatches();
       const batchIndex = batches.findIndex(b => b.id === 1);
       
       if (batchIndex !== -1) {
         const oldValue = batches[batchIndex].mintedWallets;
+        const oldTigers = oldValue * 2;
+        
+        // Als een batch 66 tigers heeft, dan is mintedWallets 33
         batches[batchIndex].mintedWallets = 33;
         
-        // Controleer of de batch marked as sold out moet zijn (exact 33 wallets = 66 tigers)
+        // Alle tigers zijn gemint (66/66), dus batch is sold out
         batches[batchIndex].isSoldOut = true;
         
         await storage.saveBatches(batches);
         
         fixes.push({
-          step: 'Reset batch 1 mintedWallets',
+          step: 'Reset batch 1 aantal tigers',
           status: 'success',
           details: {
-            oldValue,
-            newValue: 33,
-            ordinals: batches[batchIndex].ordinals,
+            oldWallets: oldValue,
+            oldTigers: oldTigers,
+            newWallets: 33,
+            newTigers: 66,
+            totalTigers: batches[batchIndex].ordinals,
             isSoldOut: batches[batchIndex].isSoldOut
           }
         });
       } else {
         fixes.push({
-          step: 'Reset batch 1 mintedWallets',
+          step: 'Reset batch 1 aantal tigers',
           status: 'error',
           details: 'Batch 1 not found'
         });
       }
     } catch (error: any) {
       fixes.push({
-        step: 'Reset batch 1 mintedWallets',
+        step: 'Reset batch 1 aantal tigers',
         status: 'error',
         details: error.message
       });
