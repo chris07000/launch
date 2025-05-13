@@ -38,7 +38,8 @@ export default function AdminPage() {
   const [previewInscriptions, setPreviewInscriptions] = useState<Inscription[]>([]);
   const [showLocalImport, setShowLocalImport] = useState(false);
   const [localImportFiles, setLocalImportFiles] = useState<Inscription[]>([]);
-  const [mintStartTime, setMintStartTime] = useState(0);
+  const [mintStartTime, setMintStartTime] = useState<number | null>(null);
+  const [mintStartDatetime, setMintStartDatetime] = useState<number | null>(null);
   const [cooldownSettings, setCooldownSettings] = useState<{[key: string]: {value: number, unit: 'minutes' | 'hours' | 'days'}}>({
     default: { value: 15, unit: 'minutes' }
   });
@@ -48,6 +49,7 @@ export default function AdminPage() {
   const [statusMessage, setStatusMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const [mintStartDateString, setMintStartDateString] = useState('');
 
   const authenticate = async () => {
     if (!password) {
@@ -688,6 +690,38 @@ export default function AdminPage() {
       console.error('Error loading dashboard data:', error);
     }
   };
+
+  // Laad de huidige mint-start timer bij initialisatie
+  useEffect(() => {
+    const loadMintStartTime = async () => {
+      try {
+        if (authenticated) {
+          const mintResponse = await fetch('/api/mint-start');
+          const mintData = await mintResponse.json();
+          
+          console.log("Loaded mint start time:", mintData);
+          
+          if (mintData.startTime) {
+            setMintStartTime(mintData.startTime);
+            
+            const date = new Date(mintData.startTime);
+            // Format in yyyy-MM-ddThh:mm format for datetime-local input
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            
+            setMintStartDateString(`${year}-${month}-${day}T${hours}:${minutes}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading mint start time:', error);
+      }
+    };
+    
+    loadMintStartTime();
+  }, [authenticated]);
 
   return (
     <div className="min-h-screen bg-black text-white pixel-grid-bg" style={{ fontFamily: "'Press Start 2P', monospace" }}>
