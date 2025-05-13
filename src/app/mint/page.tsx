@@ -612,7 +612,7 @@ export default function Home() {
                 <div style={{ fontSize: '10px', color: '#aaa' }}>PRICE:</div>
                 <div style={{ fontSize: '10px', display: 'flex', alignItems: 'center' }}>
                   <FaBitcoin style={{ color: '#f7931a', marginRight: '4px', fontSize: '8px' }} />
-                  {usdToBtc(price)} BTC
+                  {usdToBtc(typeof price === 'number' ? price : 0)} BTC
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
@@ -682,7 +682,7 @@ export default function Home() {
                     <span>Batch #{batch.id}{batch.id === 16 ? ' (FCFS)' : ''}</span>
                     <span style={{ display: 'flex', alignItems: 'center' }}>
                       <FaBitcoin style={{ color: '#f7931a', marginRight: '2px', fontSize: '8px' }} />
-                      {usdToBtc(batch.price)} BTC
+                      {usdToBtc(typeof batch.price === 'number' ? batch.price : 0)} BTC
                     </span>
                   </div>
                 ))}
@@ -907,8 +907,10 @@ export default function Home() {
                       fontSize: '12px'
                     }}>
                       <FaBitcoin style={{ color: '#f7931a', marginRight: '4px' }} />
-                      <span>{usdToBtc(price)} BTC</span>
-                      <span style={{ color: '#666', marginLeft: '4px', fontSize: '10px' }}>(${price.toFixed(2)})</span>
+                      <span>{usdToBtc(typeof price === 'number' ? price : 0)} BTC</span>
+                      <span style={{ color: '#666', marginLeft: '4px', fontSize: '10px' }}>
+                        (${typeof price === 'number' ? price.toFixed(2) : '0.00'})
+                      </span>
                     </div>
                     
                     <div style={{ fontSize: '10px', color: '#aaa' }}>TOTAL:</div>
@@ -918,8 +920,10 @@ export default function Home() {
                       fontSize: '12px'
                     }}>
                       <FaBitcoin style={{ color: '#f7931a', marginRight: '4px' }} />
-                      <span>{usdToBtc(price * quantity)} BTC</span>
-                      <span style={{ color: '#666', marginLeft: '4px', fontSize: '10px' }}>(${(price * quantity).toFixed(2)})</span>
+                      <span>{usdToBtc(typeof price === 'number' ? price * quantity : 0)} BTC</span>
+                      <span style={{ color: '#666', marginLeft: '4px', fontSize: '10px' }}>
+                        (${typeof price === 'number' && typeof quantity === 'number' ? (price * quantity).toFixed(2) : '0.00'})
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1149,7 +1153,7 @@ export default function Home() {
                   <span>Batch #{batch.id}{batch.id === 16 ? ' (FCFS)' : ''}</span>
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     <FaBitcoin style={{ color: '#f7931a', marginRight: '2px', fontSize: '8px' }} />
-                    {usdToBtc(batch.price)} BTC
+                    {usdToBtc(typeof batch.price === 'number' ? batch.price : 0)} BTC
                   </span>
                 </div>
               ))}
@@ -1170,7 +1174,9 @@ export default function Home() {
               <span>Batch #15:</span>
               <span style={{ display: 'flex', alignItems: 'center' }}>
                 <FaBitcoin style={{ color: '#f7931a', marginRight: '2px', fontSize: '8px' }} />
-                {usdToBtc(loading ? batchesFallback[14].price : (batches[14]?.price || batchesFallback[14].price))} BTC
+                {usdToBtc(loading ? 
+                  (typeof batchesFallback[14].price === 'number' ? batchesFallback[14].price : 0) : 
+                  (typeof batches[14]?.price === 'number' ? batches[14].price : 0))} BTC
               </span>
             </div>
             
