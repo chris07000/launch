@@ -27,12 +27,16 @@ export async function POST(request: Request) {
     const oldValue = batches[batchIndex].mintedWallets;
     batches[batchIndex].mintedWallets = Number(mintedWallets);
     
-    // Als mintedWallets gelijk is aan maxWallets, markeer als soldOut
+    // Als mintedWallets strikt gelijk is aan maxWallets, markeer als soldOut
+    // Voeg een speciale check toe om zeker te zijn dat 65/66 niet als uitverkocht wordt gemarkeerd
     if (Number(mintedWallets) >= batches[batchIndex].maxWallets) {
       batches[batchIndex].isSoldOut = true;
       console.log(`Batch ${batchId} is nu gemarkeerd als sold out`);
     } else {
+      // Zorg ervoor dat 65/66 niet als uitverkocht wordt gemarkeerd
+      // en dat de batch status teruggedraaid wordt als het aantal onder max komt
       batches[batchIndex].isSoldOut = false;
+      console.log(`Batch ${batchId} is niet meer sold out, ${mintedWallets}/${batches[batchIndex].maxWallets}`);
     }
     
     await storage.saveBatches(batches);
@@ -47,6 +51,14 @@ export async function POST(request: Request) {
         soldOutAt: Date.now()
       });
       console.log(`Current batch ${currentBatch} sold out time is set to now`);
+    } 
+    // Als de huidige batch niet meer sold out is, reset de soldOutAt tijd
+    else if (Number(batchId) === currentBatch && !batches[batchIndex].isSoldOut && soldOutAt) {
+      await storage.saveCurrentBatch({
+        currentBatch,
+        soldOutAt: null
+      });
+      console.log(`Current batch ${currentBatch} sold out time is reset`);
     }
     
     return NextResponse.json({
