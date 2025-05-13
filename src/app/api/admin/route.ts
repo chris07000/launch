@@ -359,11 +359,62 @@ export async function POST(request: Request) {
         });
       }
     }
-
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    // Add a new action to correct the mintedWallets count for a specific batch
+    else if (action === 'fix-batch-counter') {
+      try {
+        const { batchId, correctCount } = data;
+        
+        if (!batchId || correctCount === undefined) {
+          return new Response(JSON.stringify({ error: 'batchId and correctCount are required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Get the batches
+        const batches = await storage.getBatches();
+        
+        // Find the batch to update
+        const batchIndex = batches.findIndex(b => b.id === Number(batchId));
+        
+        if (batchIndex === -1) {
+          return new Response(JSON.stringify({ error: `Batch ${batchId} not found` }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Update the mintedWallets count
+        const oldCount = batches[batchIndex].mintedWallets;
+        batches[batchIndex].mintedWallets = Number(correctCount);
+        
+        // Save the updated batches
+        await storage.saveBatches(batches);
+        
+        // Log the change
+        console.log(`Updated mintedWallets for batch ${batchId} from ${oldCount} to ${correctCount}`);
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: `Updated mintedWallets for batch ${batchId} from ${oldCount} to ${correctCount}` 
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error: any) {
+        console.error('Error fixing batch counter:', error);
+        return new Response(JSON.stringify({ error: 'Failed to fix batch counter' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    else {
+      return new Response(JSON.stringify({ error: 'Invalid action' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   } catch (error: any) {
     console.error('Error in admin POST:', error);
     return new Response(JSON.stringify({ error: error.message }), {

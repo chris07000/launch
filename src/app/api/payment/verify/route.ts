@@ -261,24 +261,14 @@ export async function GET(request: NextRequest) {
       // Update order status
       await updateOrderStatus(order.id, 'completed');
 
-      // Update batch minted_wallets count
-      const batches = await storage.getBatches();
-      const batchIndex = batches.findIndex(b => b.id === order.batchId);
-      
-      if (batchIndex !== -1) {
-        batches[batchIndex].mintedWallets += 1;
-        await storage.saveBatches(batches);
-      }
+      // We have already incremented the mintedWallets counter in the POST method,
+      // So we don't need to do it again here to avoid double counting
+      // Instead, just log that we're skipping this step to avoid duplication
+      console.log(`Skipping mintedWallets increment for order ${order.id} - already counted in POST handler`);
 
-      // Add to minted_wallets list
-      const mintedWallets = await storage.getMintedWallets();
-      mintedWallets.push({
-        address: order.btcAddress,
-        batchId: order.batchId,
-        quantity: order.quantity,
-        timestamp: new Date().toISOString()
-      });
-      await storage.saveMintedWallets(mintedWallets);
+      // We don't need to add the wallet to minted_wallets list again either,
+      // as this was already done in the POST method
+      console.log(`Skipping adding to mintedWallets list for order ${order.id} - already added in POST handler`);
 
       return NextResponse.json({ status: 'completed' });
     }
