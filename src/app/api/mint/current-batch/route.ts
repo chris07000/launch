@@ -65,6 +65,7 @@ export async function GET() {
       
       return NextResponse.json({
         ...response,
+        batches,
         soldOut: true,
         soldOutAt,
         cooldownEnd,
@@ -75,7 +76,10 @@ export async function GET() {
       });
     }
     
-    return NextResponse.json(response, {
+    return NextResponse.json({
+      ...response,
+      batches
+    }, {
       headers: corsHeaders()
     });
   } catch (error) {
