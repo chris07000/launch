@@ -1572,6 +1572,7 @@ export default function AdminPage() {
                                   <th style={{ padding: '8px', textAlign: 'center', fontSize: '10px' }}>Status</th>
                                   <th style={{ padding: '8px', textAlign: 'left', fontSize: '10px' }}>Created At</th>
                                   <th style={{ padding: '8px', textAlign: 'center', fontSize: '10px' }}>Inscription</th>
+                                  <th style={{ padding: '8px', textAlign: 'center', fontSize: '10px' }}>Delete</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1683,6 +1684,48 @@ export default function AdminPage() {
                                             })}
                                         </select>
                                       )}
+                                    </td>
+                                    <td style={{ padding: '8px', textAlign: 'center', fontSize: '9px' }}>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Voorkom bubbeling van de klik
+                                          
+                                          if (confirm(`Weet je zeker dat je order ${order.id} wilt verwijderen?`)) {
+                                            fetch('/api/admin/delete-order', {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({
+                                                orderId: order.id,
+                                                password
+                                              })
+                                            })
+                                            .then(response => response.json())
+                                            .then(data => {
+                                              if (data.success) {
+                                                alert(`Order ${order.id} is verwijderd`);
+                                                refreshData();
+                                              } else {
+                                                alert(`Fout bij het verwijderen: ${data.error}`);
+                                              }
+                                            })
+                                            .catch(err => {
+                                              console.error('Error deleting order:', err);
+                                              alert(`Fout bij het verwijderen: ${err.message}`);
+                                            });
+                                          }
+                                        }}
+                                        style={{
+                                          backgroundColor: '#ef4444',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '2px',
+                                          padding: '3px 6px',
+                                          fontSize: '8px',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Delete
+                                      </button>
                                     </td>
                                   </tr>
                                 ))}
