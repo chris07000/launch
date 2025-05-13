@@ -93,9 +93,9 @@ export async function POST(request: Request) {
       newTigers: actualTigers,
       requestedTigers: Number(mintedTigers),
       totalTigersInBatch: totalTigersInBatch,
-      mintedWallets: newWallets, // Voor backward compatibility
-      isSoldOut: batches[batchIndex].isSoldOut,
-      maxWallets: batches[batchIndex].maxWallets // Voor backward compatibility
+      mintedWallets: newWallets, // Voor backward compatibility (kan later verwijderd worden)
+      isSoldOut: batches[batchIndex].isSoldOut
+      // maxWallets verwijderd omdat we nu tigers tellen
     });
   } catch (error: any) {
     console.error('Error in set-batch-status:', error);
