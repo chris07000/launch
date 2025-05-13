@@ -36,11 +36,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Check direct if batch is sold out - do this early to avoid unnecessary checks
     if (batch.isSoldOut) {
       return NextResponse.json({
         eligible: false,
         reason: 'batch_sold_out',
-        message: `Batch #${batchId} is sold out`
+        message: `Batch #${batchId} is sold out. Please wait for the next batch to open.`
       });
     }
 

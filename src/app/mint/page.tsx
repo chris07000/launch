@@ -288,6 +288,12 @@ export default function Home() {
     setCanMint(false);
     setBatchNumber(0);
     
+    // Als de batch sold out is, voorkom verificatie
+    if (isSoldOut) {
+      setError(`Batch ${currentBatch} is sold out. Please wait for the next batch to open.`);
+      return;
+    }
+    
     // Check for empty address
     if (!btcAddress.trim()) {
       setError('Please enter your BTC address');
@@ -810,25 +816,27 @@ export default function Home() {
                   <div style={{ fontSize: '9px', color: '#aaa', marginBottom: '8px' }}>
                     Must start with bc1p (Taproot address) to receive Ordinals
                   </div>
+                  {/* VERIFICATION BUTTON */}
                   <button 
                     onClick={verifyAddress}
+                    disabled={isSoldOut}
                     className="pixel-button"
                     style={{ 
                       marginTop: '8px',
-                      backgroundColor: '#ffd700', 
-                      color: 'black', 
+                      backgroundColor: isSoldOut ? '#333' : '#ffd700', 
+                      color: isSoldOut ? '#666' : 'black', 
                       padding: '6px 8px',
                       border: '2px solid',
-                      borderTopColor: '#ffd700',
-                      borderLeftColor: '#ffd700',
-                      borderRightColor: '#aa8e00',
-                      borderBottomColor: '#aa8e00',
+                      borderTopColor: isSoldOut ? '#444' : '#ffd700',
+                      borderLeftColor: isSoldOut ? '#444' : '#ffd700',
+                      borderRightColor: isSoldOut ? '#222' : '#aa8e00',
+                      borderBottomColor: isSoldOut ? '#222' : '#aa8e00',
                       width: '100%',
                       fontSize: '10px',
-                      cursor: 'pointer'
+                      cursor: isSoldOut ? 'not-allowed' : 'pointer'
                     }}
                   >
-                    VERIFY ADDRESS
+                    {isSoldOut ? 'BATCH SOLD OUT' : 'VERIFY ADDRESS'}
                   </button>
 
                   {/* ERROR MESSAGE */}
@@ -998,30 +1006,30 @@ export default function Home() {
               }}>
                 <button
                   onClick={handleSubmit}
-                  disabled={isLoading || !canMint}
+                  disabled={isLoading || !canMint || isSoldOut}
                   className="shine-effect"
                   style={{ 
-                    backgroundColor: '#ffd700', 
-                    color: 'black', 
+                    backgroundColor: isLoading || !canMint || isSoldOut ? '#333' : '#ffd700', 
+                    color: isLoading || !canMint || isSoldOut ? '#666' : 'black', 
                     padding: '10px',
                     width: '200px',
                     fontSize: '14px',
                     textTransform: 'uppercase',
                     border: '2px solid',
-                    borderTopColor: '#ffd700',
-                    borderLeftColor: '#ffd700',
-                    borderRightColor: '#aa8e00',
-                    borderBottomColor: '#aa8e00',
-                    opacity: (isLoading || !canMint) ? 0.5 : 1,
-                    cursor: 'pointer'
+                    borderTopColor: isLoading || !canMint || isSoldOut ? '#444' : '#ffd700',
+                    borderLeftColor: isLoading || !canMint || isSoldOut ? '#444' : '#ffd700',
+                    borderRightColor: isLoading || !canMint || isSoldOut ? '#222' : '#aa8e00',
+                    borderBottomColor: isLoading || !canMint || isSoldOut ? '#222' : '#aa8e00',
+                    opacity: (isLoading || !canMint || isSoldOut) ? 0.5 : 1,
+                    cursor: (isLoading || !canMint || isSoldOut) ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {isLoading ? 'PROCESSING...' : 'MINT NOW'}
+                  {isLoading ? 'PROCESSING...' : (isSoldOut ? 'BATCH SOLD OUT' : 'MINT NOW')}
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <FaLock style={{ color: '#ffd700' }} size={9} />
                   <span style={{ fontSize: '9px', color: '#ffd700' }}>
-                    SECURE BTC TRANSACTION
+                    {isSoldOut ? 'WAITING FOR NEXT BATCH' : 'SECURE BTC TRANSACTION'}
                   </span>
                 </div>
               </div>
