@@ -243,24 +243,26 @@ export async function POST(request: NextRequest) {
       // Update order status to paid
       await updateOrderStatus(orderId, 'paid');
       
-      // Update batch minted_wallets count in database and increment by 1
-      const batches = await storage.getBatches();
-      const batchIndex = batches.findIndex(b => b.id === orderStatus.batchId);
-      
-      if (batchIndex !== -1) {
-        batches[batchIndex].mintedWallets += 1;
-        await storage.saveBatches(batches);
-      }
-      
       // Check if the wallet is already in minted_wallets to prevent duplicate error
       try {
         const mintedWallets = await storage.getMintedWallets();
         // Controleer of de wallet al bestaat voor deze batch
-        const walletExists = mintedWallets.some(
+        const existingWalletIndex = mintedWallets.findIndex(
           (w) => w.address === orderStatus.btcAddress && w.batchId === orderStatus.batchId
         );
         
-        if (!walletExists) {
+        // Update batch minted_wallets count in database
+        const batches = await storage.getBatches();
+        const batchIndex = batches.findIndex(b => b.id === orderStatus.batchId);
+        
+        if (batchIndex !== -1) {
+          // Increment by the order quantity (1 or 2)
+          console.log(`Incrementing mintedWallets counter for batch ${orderStatus.batchId} from ${batches[batchIndex].mintedWallets} to ${batches[batchIndex].mintedWallets + orderStatus.quantity}`);
+          batches[batchIndex].mintedWallets += orderStatus.quantity;
+          await storage.saveBatches(batches);
+        }
+
+        if (existingWalletIndex === -1) {
           // Add wallet to minted_wallets list
           mintedWallets.push({
             address: orderStatus.btcAddress,
@@ -269,9 +271,12 @@ export async function POST(request: NextRequest) {
             timestamp: new Date().toISOString()
           });
           await storage.saveMintedWallets(mintedWallets);
-          console.log(`Added wallet ${orderStatus.btcAddress} to minted_wallets for batch ${orderStatus.batchId}`);
+          console.log(`Added wallet ${orderStatus.btcAddress} to minted_wallets for batch ${orderStatus.batchId} with quantity ${orderStatus.quantity}`);
         } else {
-          console.log(`Wallet ${orderStatus.btcAddress} already exists in minted_wallets for batch ${orderStatus.batchId} - skipping`);
+          // Update the existing wallet with the new quantity
+          mintedWallets[existingWalletIndex].quantity += orderStatus.quantity;
+          await storage.saveMintedWallets(mintedWallets);
+          console.log(`Updated existing wallet ${orderStatus.btcAddress} in minted_wallets for batch ${orderStatus.batchId}, new quantity: ${mintedWallets[existingWalletIndex].quantity}`);
         }
       } catch (error) {
         console.error('Error updating minted wallets:', error);

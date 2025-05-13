@@ -450,6 +450,65 @@ export async function POST(request: Request) {
         });
       }
     }
+    // Add a new action to recalculate all mintedWallets counters based on actual data
+    else if (action === 'recalculate-batch-wallets') {
+      try {
+        // Get all minted wallets
+        const mintedWallets = await storage.getMintedWallets();
+        
+        // Get all batches
+        const batches = await storage.getBatches();
+        
+        // Create a counter for each batch
+        const batchCounts: Record<number, number> = {};
+        
+        // Initialize counts with 0
+        batches.forEach(batch => {
+          batchCounts[batch.id] = 0;
+        });
+        
+        // Count wallets per batch, considering quantity
+        mintedWallets.forEach(wallet => {
+          if (batchCounts[wallet.batchId] !== undefined) {
+            // Add the quantity of minted ordinals, not just count the wallet once
+            batchCounts[wallet.batchId] += wallet.quantity;
+          }
+        });
+        
+        // Update each batch with the correct count
+        let changes = 0;
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          const correctCount = batchCounts[batch.id] || 0;
+          
+          if (batch.mintedWallets !== correctCount) {
+            console.log(`Updating batch ${batch.id} mintedWallets from ${batch.mintedWallets} to ${correctCount}`);
+            batches[i].mintedWallets = correctCount;
+            changes++;
+          }
+        }
+        
+        // Save updated batches
+        if (changes > 0) {
+          await storage.saveBatches(batches);
+        }
+        
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Recalculated mintedWallets counters based on quantity. Updated ${changes} batch(es).`,
+          batchCounts
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error: any) {
+        console.error('Error recalculating batch wallets:', error);
+        return new Response(JSON.stringify({ error: 'Failed to recalculate batch wallets' }), {
+          status: 500, 
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
     else {
       return new Response(JSON.stringify({ error: 'Invalid action' }), {
         status: 400,
