@@ -359,6 +359,47 @@ export async function POST(request: Request) {
         });
       }
     }
+    // Add a new action to reset only orders and minted_wallets
+    else if (action === 'reset-orders') {
+      try {
+        console.log('Resetting orders and minted_wallets only...');
+        
+        // Reset orders
+        await storage.saveOrders([]);
+        console.log('Orders reset successfully');
+        
+        // Reset minted wallets
+        await storage.saveMintedWallets([]);
+        console.log('Minted wallets reset successfully');
+        
+        // Get current batches
+        const batches = await storage.getBatches();
+        
+        // Reset mintedWallets counter for all batches
+        const updatedBatches = batches.map(batch => ({
+          ...batch,
+          mintedWallets: 0
+        }));
+        
+        // Save updated batches
+        await storage.saveBatches(updatedBatches);
+        console.log('Batch mintedWallets counters reset successfully');
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Orders and minted wallets have been reset successfully' 
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error: any) {
+        console.error('Error resetting orders and minted wallets:', error);
+        return new Response(JSON.stringify({ error: 'Failed to reset orders and minted wallets' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
     // Add a new action to correct the mintedWallets count for a specific batch
     else if (action === 'fix-batch-counter') {
       try {
