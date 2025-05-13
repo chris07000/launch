@@ -78,7 +78,7 @@ export default function Home() {
         
         if (data.batches && Array.isArray(data.batches)) {
           console.log('Eerste batch prijs:', data.batches[0]?.price, 'Type:', typeof data.batches[0]?.price);
-          console.log('Alle batch prijzen:', data.batches.map(b => ({ id: b.id, price: b.price, typeOfPrice: typeof b.price })));
+          console.log('Alle batch prijzen:', data.batches.map((b: Batch) => ({ id: b.id, price: b.price, typeOfPrice: typeof b.price })));
           setBatches(data.batches);
         } else {
           console.log('Geen geldige batches data ontvangen');
