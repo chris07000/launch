@@ -26,6 +26,44 @@ interface OrderStatus {
 
 const BLOCKCHAIN_API_DELAY = 2000; // 2 seconds
 
+/**
+ * Functie om de batch teller exact te synchroniseren met de werkelijke data
+ * Dit garandeert dat de teller altijd klopt, ongeacht eerdere problemen
+ */
+export async function synchronizeBatchCounter(batchId: number): Promise<void> {
+  try {
+    // Alle geminte wallets ophalen
+    const mintedWallets = await storage.getMintedWallets();
+    
+    // Tel alleen de wallets die bij deze batch horen
+    let totalMintsForBatch = 0;
+    mintedWallets.forEach(wallet => {
+      if (wallet.batchId === batchId) {
+        totalMintsForBatch += wallet.quantity;
+      }
+    });
+    
+    // Haal batches op
+    const batches = await storage.getBatches();
+    
+    // Vind de huidige batch
+    const batchIndex = batches.findIndex(b => b.id === batchId);
+    
+    if (batchIndex !== -1) {
+      // Update mintedWallets met de exacte tellingen, ongeacht wat het was
+      if (batches[batchIndex].mintedWallets !== totalMintsForBatch) {
+        console.log(`[SYNC] Updating batch ${batchId} mintedWallets counter: ${batches[batchIndex].mintedWallets} → ${totalMintsForBatch}`);
+        batches[batchIndex].mintedWallets = totalMintsForBatch;
+        await storage.saveBatches(batches);
+      } else {
+        console.log(`[SYNC] Batch ${batchId} counter is already correct: ${totalMintsForBatch}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error synchronizing batch counter:', error);
+  }
+}
+
 async function startInscriptionProcess(orderId: string): Promise<void> {
   try {
     // Simulate inscription process
@@ -251,17 +289,7 @@ export async function POST(request: NextRequest) {
           (w) => w.address === orderStatus.btcAddress && w.batchId === orderStatus.batchId
         );
         
-        // Update batch minted_wallets count in database
-        const batches = await storage.getBatches();
-        const batchIndex = batches.findIndex(b => b.id === orderStatus.batchId);
-        
-        if (batchIndex !== -1) {
-          // Increment by the order quantity (1 or 2)
-          console.log(`Incrementing mintedWallets counter for batch ${orderStatus.batchId} from ${batches[batchIndex].mintedWallets} to ${batches[batchIndex].mintedWallets + orderStatus.quantity}`);
-          batches[batchIndex].mintedWallets += orderStatus.quantity;
-          await storage.saveBatches(batches);
-        }
-
+        // Registreer deze mint
         if (existingWalletIndex === -1) {
           // Add wallet to minted_wallets list
           mintedWallets.push({
@@ -278,6 +306,9 @@ export async function POST(request: NextRequest) {
           await storage.saveMintedWallets(mintedWallets);
           console.log(`Updated existing wallet ${orderStatus.btcAddress} in minted_wallets for batch ${orderStatus.batchId}, new quantity: ${mintedWallets[existingWalletIndex].quantity}`);
         }
+
+        // Synchroniseer de teller met de database, zodat hij ALTIJD klopt
+        await synchronizeBatchCounter(orderStatus.batchId);
       } catch (error) {
         console.error('Error updating minted wallets:', error);
         // Continue even if there's an error with minted_wallets
@@ -351,6 +382,9 @@ export async function GET(request: NextRequest) {
       // We don't need to add the wallet to minted_wallets list again either,
       // as this was already done in the POST method
       console.log(`Skipping adding to mintedWallets list for order ${order.id} - already added in POST handler`);
+
+      // Toch de synchronisatiefunctie aanroepen om zeker te zijn dat alles klopt
+      await synchronizeBatchCounter(order.batchId);
 
       return NextResponse.json({ status: 'completed' });
     }

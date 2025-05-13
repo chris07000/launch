@@ -1,5 +1,6 @@
 import * as storage from '@/lib/storage-wrapper-db-only';
 import { Batch, WhitelistEntry } from '@/lib/types';
+import { synchronizeBatchCounter } from '@/app/api/payment/verify/route';
 
 // Define default batches
 const defaultBatches = [
@@ -307,9 +308,8 @@ export async function POST(request: Request) {
         // Save minted wallets
         await storage.saveMintedWallets(mintedWallets);
         
-        // Update batches - increment mintedWallets by 1
-        batches[batchIndex].mintedWallets += 1;
-        await storage.saveBatches(batches);
+        // In plaats van handmatig de teller bij te werken, gebruiken we de synchronizatiefunctie
+        await synchronizeBatchCounter(actualBatchId);
         
         return new Response(JSON.stringify({ 
           success: true, 
@@ -504,6 +504,44 @@ export async function POST(request: Request) {
       } catch (error: any) {
         console.error('Error recalculating batch wallets:', error);
         return new Response(JSON.stringify({ error: 'Failed to recalculate batch wallets' }), {
+          status: 500, 
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    // Quick fix for batch 1 counter
+    else if (action === 'fix-batch-1') {
+      try {
+        // Get all batches
+        const batches = await storage.getBatches();
+        
+        // Find batch 1
+        const batchIndex = batches.findIndex(b => b.id === 1);
+        
+        if (batchIndex === -1) {
+          return new Response(JSON.stringify({ error: 'Batch 1 not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        
+        // Force set to 1 minted wallet
+        const oldCount = batches[batchIndex].mintedWallets;
+        batches[batchIndex].mintedWallets = 1;
+        
+        // Save updated batches
+        await storage.saveBatches(batches);
+        
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Updated batch 1 mintedWallets from ${oldCount} to 1`
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error: any) {
+        console.error('Error fixing batch 1:', error);
+        return new Response(JSON.stringify({ error: 'Failed to fix batch 1' }), {
           status: 500, 
           headers: { 'Content-Type': 'application/json' }
         });
