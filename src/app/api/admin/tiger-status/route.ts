@@ -111,16 +111,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Batch ${batchId} niet gevonden` }, { status: 404 });
     }
     
-    // Convert tigers naar wallets (in de database is 1 wallet = 2 tigers)
-    const mintedWallets = Math.ceil(Number(mintedTigers) / 2);
+    // Update de batch waarden
+    const oldTigers = batches[batchIndex].mintedWallets * 2;
+    const totalTigersInBatch = batches[batchIndex].ordinals;
+    
+    // Check of de batch bijna vol is (65 of 66 van de 66)
+    const isAlmostFull = Number(mintedTigers) >= totalTigersInBatch - 1;
+    
+    // Als het aantal bijna vol is (65 of 66 van de 66), ronden we af naar vol
+    let mintedWallets;
+    let actualTigers;
+    let isSoldOut;
+    
+    if (isAlmostFull) {
+      // Bij 65 of 66 tigers, beschouw als vol
+      mintedWallets = Math.ceil(totalTigersInBatch / 2);
+      actualTigers = totalTigersInBatch;
+      isSoldOut = true;
+      console.log(`Batch ${batchId} is bijna of helemaal vol (${mintedTigers}/${totalTigersInBatch}), behandeld als vol`);
+    } else {
+      mintedWallets = Math.ceil(Number(mintedTigers) / 2);
+      actualTigers = Number(mintedTigers);
+      isSoldOut = false;
+    }
     
     // Update de batch
-    const oldTigers = batches[batchIndex].mintedWallets * 2;
     batches[batchIndex].mintedWallets = mintedWallets;
-    
-    // Bepaal of de batch sold out is
-    const totalTigers = batches[batchIndex].ordinals;
-    batches[batchIndex].isSoldOut = Number(mintedTigers) >= totalTigers;
+    batches[batchIndex].isSoldOut = isSoldOut;
     
     await storage.saveBatches(batches);
     
@@ -128,13 +145,13 @@ export async function POST(request: Request) {
     const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
     
     if (Number(batchId) === currentBatch) {
-      if (batches[batchIndex].isSoldOut && !soldOutAt) {
+      if (isSoldOut && !soldOutAt) {
         // Als de batch nu uitverkocht is maar nog geen sold out timestamp heeft
         await storage.saveCurrentBatch({
           currentBatch,
           soldOutAt: Date.now()
         });
-      } else if (!batches[batchIndex].isSoldOut && soldOutAt) {
+      } else if (!isSoldOut && soldOutAt) {
         // Als de batch niet meer uitverkocht is maar wel een sold out timestamp heeft
         await storage.saveCurrentBatch({
           currentBatch,
@@ -145,13 +162,14 @@ export async function POST(request: Request) {
     
     return NextResponse.json({
       status: 'success',
-      message: `Batch ${batchId} bijgewerkt: ${oldTigers} → ${mintedTigers} tigers`,
+      message: `Batch ${batchId} bijgewerkt: ${oldTigers} → ${actualTigers} tigers ${isSoldOut ? '(UITVERKOCHT)' : ''}`,
       details: {
         batchId: Number(batchId),
         oldTigers,
-        newTigers: Number(mintedTigers),
-        totalTigers,
-        isSoldOut: batches[batchIndex].isSoldOut
+        requestedTigers: Number(mintedTigers),
+        newTigers: actualTigers,
+        totalTigers: totalTigersInBatch,
+        isSoldOut
       }
     });
   } catch (error: any) {

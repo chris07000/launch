@@ -33,8 +33,13 @@ export async function GET(request: Request) {
         const oldValue = batches[batchIndex].mintedWallets;
         const oldTigers = oldValue * 2;
         
+        // Bij exact 66 tigers (volle batch)
+        const totalTigersInBatch = batches[batchIndex].ordinals;
+        const targetTigers = totalTigersInBatch; // We willen een volle batch (66/66)
+        const targetWallets = Math.ceil(targetTigers / 2);
+        
         // Als een batch 66 tigers heeft, dan is mintedWallets 33
-        batches[batchIndex].mintedWallets = 33;
+        batches[batchIndex].mintedWallets = targetWallets;
         
         // Alle tigers zijn gemint (66/66), dus batch is sold out
         batches[batchIndex].isSoldOut = true;
@@ -47,9 +52,9 @@ export async function GET(request: Request) {
           details: {
             oldWallets: oldValue,
             oldTigers: oldTigers,
-            newWallets: 33,
-            newTigers: 66,
-            totalTigers: batches[batchIndex].ordinals,
+            newWallets: targetWallets,
+            newTigers: targetTigers,
+            totalTigers: totalTigersInBatch,
             isSoldOut: batches[batchIndex].isSoldOut
           }
         });

@@ -37,24 +37,31 @@ export async function POST(request: Request) {
     const oldTigers = oldValue * 2;
     
     // Converteer tigers naar wallets voor database opslag (1 wallet = 2 tigers)
-    const newWallets = Math.ceil(Number(mintedTigers) / 2);
-    batches[batchIndex].mintedWallets = newWallets;
-    
-    // Bereken het totale aantal geminte tigers en het doel
-    const totalMintedTigers = Number(mintedTigers);
+    // Als we exact 65 tigers hebben, moeten we dat beschouwen als 66 (vol)
     const totalTigersInBatch = batches[batchIndex].ordinals;
+    const isAlmostFull = Number(mintedTigers) >= totalTigersInBatch - 1;
     
-    console.log(`Batch ${batchId}: ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
+    // Als het aantal bijna vol is (65 of 66 van de 66), ronden we af naar vol
+    let newWallets;
+    let actualTigers;
+    let isSoldOut;
     
-    // Alleen sold out als ALLE tigers zijn gemint
-    if (totalMintedTigers >= totalTigersInBatch) {
-      batches[batchIndex].isSoldOut = true;
-      console.log(`Batch ${batchId} is nu gemarkeerd als sold out (alle ${totalTigersInBatch} tigers zijn gemint)`);
+    if (isAlmostFull) {
+      // Bij 65 of 66 tigers, beschouw als vol
+      newWallets = Math.ceil(totalTigersInBatch / 2);
+      actualTigers = totalTigersInBatch;
+      isSoldOut = true;
+      console.log(`Batch ${batchId} is bijna of helemaal vol (${mintedTigers}/${totalTigersInBatch}), behandeld als vol`);
     } else {
-      // Batch is niet uitverkocht als er nog tigers beschikbaar zijn
-      batches[batchIndex].isSoldOut = false;
-      console.log(`Batch ${batchId} is niet sold out, ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
+      newWallets = Math.ceil(Number(mintedTigers) / 2);
+      actualTigers = Number(mintedTigers);
+      isSoldOut = false;
     }
+    
+    batches[batchIndex].mintedWallets = newWallets;
+    batches[batchIndex].isSoldOut = isSoldOut;
+    
+    console.log(`Batch ${batchId}: ${actualTigers}/${totalTigersInBatch} tigers gemint, isSoldOut: ${isSoldOut}`);
     
     await storage.saveBatches(batches);
     
@@ -80,9 +87,10 @@ export async function POST(request: Request) {
     
     return NextResponse.json({
       success: true,
-      message: `Batch ${batchId} bijgewerkt: ${oldTigers} → ${totalMintedTigers} tigers`,
+      message: `Batch ${batchId} bijgewerkt: ${oldTigers} → ${actualTigers} tigers ${isSoldOut ? '(UITVERKOCHT)' : ''}`,
       oldTigers: oldTigers,
-      newTigers: totalMintedTigers,
+      newTigers: actualTigers,
+      requestedTigers: Number(mintedTigers),
       totalTigersInBatch: totalTigersInBatch,
       mintedWallets: newWallets, // Voor backward compatibility
       isSoldOut: batches[batchIndex].isSoldOut,
