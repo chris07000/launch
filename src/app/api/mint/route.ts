@@ -161,8 +161,18 @@ export async function POST(request: NextRequest) {
 
     // Create mint order
     const order = await createMintOrder(btcAddress, quantity, batchId);
+    
+    // Log de order om te debuggen
+    console.log('Created order:', order);
 
-    return new Response(JSON.stringify(order), {
+    // Zorg ervoor dat we altijd een orderId in de response hebben, ongeacht welke createMintOrder functie we gebruiken
+    const responseData = {
+      ...order,
+      // Controleer welke property beschikbaar is (id of orderId) en gebruik die
+      orderId: 'orderId' in order ? order.orderId : ('id' in order ? order.id : `order_${Date.now()}`)
+    };
+
+    return new Response(JSON.stringify(responseData), {
       status: 200,
       headers: { 
         'Content-Type': 'application/json',
