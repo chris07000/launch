@@ -33,29 +33,21 @@ export async function POST(request: Request) {
       : batches[batchIndex].mintedWallets * 2;
     
     // Calculate if batch is full or almost full
-    const totalTigersInBatch = batches[batchIndex].ordinals;
-    const isAlmostFull = Number(mintedTigers) >= totalTigersInBatch - 1;
+    const totalTigersInBatch = batches[batchIndex].ordinals || 66;
     
-    // Set new values
-    let actualTigers;
-    let isSoldOut;
+    // Directe toewijzing van de opgegeven waarde zonder afrondingen
+    // Gebruiker kan zelf kiezen of hij 65 of 66 wil instellen
+    const actualTigers = Number(mintedTigers);
     
-    if (isAlmostFull) {
-      // If nearly full (65 or 66 of 66), mark as completely full
-      actualTigers = totalTigersInBatch;
-      isSoldOut = true;
-      console.log(`Batch ${batchId} is bijna of helemaal vol (${mintedTigers}/${totalTigersInBatch}), behandeld als vol`);
-    } else {
-      actualTigers = Number(mintedTigers);
-      isSoldOut = false;
-    }
+    // Bepaal isSoldOut op basis van of we het maximum aantal tigers hebben bereikt
+    const isSoldOut = actualTigers >= totalTigersInBatch;
     
     // Update batch values - keep mintedWallets for backward compatibility
     batches[batchIndex].mintedWallets = Math.ceil(actualTigers / 2);
     batches[batchIndex].mintedTigers = actualTigers;
     batches[batchIndex].isSoldOut = isSoldOut;
     
-    console.log(`Batch ${batchId}: ${actualTigers}/${totalTigersInBatch} tigers gemint, isSoldOut: ${isSoldOut}`);
+    console.log(`Batch ${batchId}: exact op ${actualTigers}/${totalTigersInBatch} tigers gezet, isSoldOut: ${isSoldOut}`);
     
     await storage.saveBatches(batches);
     
