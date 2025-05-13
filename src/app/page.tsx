@@ -51,16 +51,22 @@ export default function HomePage() {
         
         // Check if batch is sold out
         if (currentBatchData.soldOutAt) {
-          const now = Date.now();
-          const timeSinceSoldOut = now - currentBatchData.soldOutAt;
-          const timeLeftMs = Math.max(0, (15 * 60 * 1000) - timeSinceSoldOut);
-          
-          if (timeLeftMs > 0) {
+          if (currentBatchData.timeLeft) {
             setIsSoldOut(true);
-            setTimeLeft(Math.floor(timeLeftMs / 1000));
+            setTimeLeft(Math.floor(currentBatchData.timeLeft / 1000));
           } else {
-            setIsSoldOut(false);
-            setTimeLeft(0);
+            const now = Date.now();
+            const cooldownDuration = currentBatchData.cooldownDuration || (15 * 60 * 1000);
+            const timeSinceSoldOut = now - currentBatchData.soldOutAt;
+            const timeLeftMs = Math.max(0, cooldownDuration - timeSinceSoldOut);
+            
+            if (timeLeftMs > 0) {
+              setIsSoldOut(true);
+              setTimeLeft(Math.floor(timeLeftMs / 1000));
+            } else {
+              setIsSoldOut(false);
+              setTimeLeft(0);
+            }
           }
         } else {
           setIsSoldOut(false);
