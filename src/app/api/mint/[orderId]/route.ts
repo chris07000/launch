@@ -19,8 +19,25 @@ export async function GET(
     const orderStatus = await getOrderStatus(orderId);
     console.log(`Order ${orderId} status retrieved:`, orderStatus);
     
+    // Zorg ervoor dat de totalPriceBtc en pricePerUnitBtc waarden altijd correct worden teruggestuurd
+    // Als deze waarden niet aanwezig zijn, worden ze berekend uit de totalPrice
+    const enhancedOrderStatus = {
+      ...orderStatus,
+      // Gebruik expliciete type checking om TypeScript errors te voorkomen
+      totalPriceBtc: 'totalPriceBtc' in orderStatus ? 
+        orderStatus.totalPriceBtc : 
+        orderStatus.totalPrice,
+      // Zorg ervoor dat pricePerUnitBtc altijd een waarde heeft
+      pricePerUnitBtc: 'pricePerUnitBtc' in orderStatus ? 
+        orderStatus.pricePerUnitBtc : 
+        (orderStatus.pricePerUnit ? orderStatus.pricePerUnit / 40000 : 0.00625) // Fallback BTC/USD koers met null check
+    };
+    
+    // Log enhanced order voor debugging
+    console.log(`Enhanced order status:`, enhancedOrderStatus);
+    
     // Response teruggeven
-    return NextResponse.json(orderStatus);
+    return NextResponse.json(enhancedOrderStatus);
   } catch (error: any) {
     // Error handling
     const errorMessage = error.message || 'Something went wrong';

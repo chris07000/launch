@@ -45,6 +45,15 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
         }
         
         const data = await response.json();
+        
+        // Debug logging
+        console.log('Order data received:', data);
+        console.log('BTC price data:', {
+          totalPriceBtc: data.totalPriceBtc, 
+          pricePerUnitBtc: data.pricePerUnitBtc,
+          totalPrice: data.totalPrice // This might be the BTC price in some implementations
+        });
+        
         setOrderData(data);
         setPaymentStatus(data.status || 'pending');
         setIsLoading(false);
@@ -230,14 +239,31 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
 
   // Helper function to safely format numbers
   const formatNumber = (value: any, decimals: number = 2) => {
+    console.log(`Formatting value: ${value}, type: ${typeof value}, decimals: ${decimals}`);
+    
     if (value === undefined || value === null) {
+      console.log('Value is undefined or null, returning "0.00"');
       return "0.00";
     }
     
     try {
+      // Convert string to number if needed
       const num = typeof value === 'string' ? parseFloat(value) : value;
-      if (isNaN(num)) return "0.00";
-      return num.toFixed(decimals);
+      
+      // Check if number is valid
+      if (isNaN(num)) {
+        console.log('Value is NaN, returning "0.00"');
+        return "0.00";
+      }
+      
+      // Make sure value is treated as a number
+      const numValue = Number(num);
+      console.log(`Converted to number: ${numValue}`);
+      
+      // Format with correct decimals
+      const formatted = numValue.toFixed(decimals);
+      console.log(`Formatted result: ${formatted}`);
+      return formatted;
     } catch (err) {
       console.error("Error formatting number:", err);
       return "0.00";
