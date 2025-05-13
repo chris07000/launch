@@ -9,7 +9,6 @@ import { fetchApi, handleApiError } from '@/lib/api';
 export default function HomePage() {
   const [isMobile, setIsMobile] = useState(false);
   const [currentBatch, setCurrentBatch] = useState<number>(1);
-  const [mintedWallets, setMintedWallets] = useState<number>(0);
   const [mintedTigers, setMintedTigers] = useState<number>(0);
   const [totalTigers, setTotalTigers] = useState<number>(66);
   const [loading, setLoading] = useState(true);
@@ -77,16 +76,17 @@ export default function HomePage() {
         
         if (data && Array.isArray(data.batches)) {
           const currentBatchData = data.batches.find((b: { id: number }) => b.id === currentBatch);
-          setMintedWallets(currentBatchData?.mintedWallets || 0);
           
-          // Update tigers count
-          const tigers = currentBatchData?.mintedTigers !== undefined 
-            ? currentBatchData.mintedTigers 
-            : (currentBatchData?.mintedWallets || 0) * 2;
-          setMintedTigers(tigers);
-          
-          // Total tigers is ordinals property
-          setTotalTigers(currentBatchData?.ordinals || 66);
+          // Update tigers count - prefer direct mintedTigers value if available
+          if (currentBatchData) {
+            const tigers = currentBatchData.mintedTigers !== undefined 
+              ? currentBatchData.mintedTigers 
+              : (currentBatchData.mintedWallets || 0) * 2;
+            setMintedTigers(tigers);
+            
+            // Total tigers is ordinals property
+            setTotalTigers(currentBatchData.ordinals || 66);
+          }
         }
         
         setLoading(false);

@@ -13,6 +13,7 @@ interface Batch {
   maxWallets: number;
   ordinals: number;
   isSoldOut: boolean;
+  mintedTigers?: number;
 }
 
 export default function Home() {
@@ -623,7 +624,9 @@ export default function Home() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <div style={{ fontSize: '10px', color: '#aaa' }}>MINTED:</div>
                   <div style={{ fontSize: '10px' }}>
-                    {loading ? '...' : `${(batches.find(b => b.id === currentBatch)?.mintedWallets || 0) * 2} / ${(batches.find(b => b.id === currentBatch)?.ordinals || 66)} Tigers`}
+                    {loading ? '...' : `${batches.find(b => b.id === currentBatch)?.mintedTigers !== undefined 
+                      ? batches.find(b => b.id === currentBatch)?.mintedTigers 
+                      : (batches.find(b => b.id === currentBatch)?.mintedWallets || 0) * 2} / ${(batches.find(b => b.id === currentBatch)?.ordinals || 66)} Tigers`}
                   </div>
                 </div>
                 <div style={{ 
@@ -634,7 +637,9 @@ export default function Home() {
                   overflow: 'hidden'
                 }}>
                   <div style={{ 
-                    width: `${loading ? 0 : (((batches.find(b => b.id === currentBatch)?.mintedWallets || 0) * 2) / (batches.find(b => b.id === currentBatch)?.ordinals || 66)) * 100}%`, 
+                    width: `${loading ? 0 : ((batches.find(b => b.id === currentBatch)?.mintedTigers !== undefined 
+                      ? batches.find(b => b.id === currentBatch)?.mintedTigers 
+                      : (batches.find(b => b.id === currentBatch)?.mintedWallets || 0) * 2) / (batches.find(b => b.id === currentBatch)?.ordinals || 66)) * 100}%`, 
                     height: '100%', 
                     backgroundColor: '#ffd700',
                     transition: 'width 0.5s ease-in-out'
