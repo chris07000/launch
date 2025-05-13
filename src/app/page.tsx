@@ -37,100 +37,44 @@ export default function HomePage() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // Fetch current batch info
+  // Effect for fetching current batch
   useEffect(() => {
     const fetchBatchInfo = async () => {
       try {
-        console.log('Ophalen batch info op homepage...');
-        const currentBatchData = await fetchApi('/api/mint/current-batch');
-        console.log('Ontvangen data homepage:', currentBatchData);
+        setLoading(true);
+        // Get current batch status
+        const response = await fetch('/api/mint/current-batch');
+        const data = await response.json();
+
+        console.log('Current batch data:', data);
         
-        // Update current batch
-        if (currentBatchData.currentBatch) {
-          setCurrentBatch(currentBatchData.currentBatch);
+        if (data.currentBatch) {
+          setCurrentBatch(data.currentBatch);
         }
-        
-        // Direct tigers data gebruiken van de API
-        if (currentBatchData.mintedTigers !== undefined) {
-          setMintedTigers(currentBatchData.mintedTigers);
-        }
-        
-        if (currentBatchData.totalTigers) {
-          setTotalTigers(currentBatchData.totalTigers);
-        }
-        
-        // Check if batch is sold out
-        if (currentBatchData.soldOutAt) {
-          if (currentBatchData.timeLeft) {
-            setIsSoldOut(true);
-            setTimeLeft(Math.floor(currentBatchData.timeLeft / 1000));
-          } else {
-            const now = Date.now();
-            const cooldownDuration = currentBatchData.cooldownDuration || (15 * 60 * 1000);
-            const timeSinceSoldOut = now - currentBatchData.soldOutAt;
-            const timeLeftMs = Math.max(0, cooldownDuration - timeSinceSoldOut);
-            
-            if (timeLeftMs > 0) {
-              setIsSoldOut(true);
-              setTimeLeft(Math.floor(timeLeftMs / 1000));
-            } else {
-              setIsSoldOut(false);
-              setTimeLeft(0);
-            }
+
+        if (data.soldOut) {
+          setIsSoldOut(true);
+          if (data.timeLeft) {
+            setTimeLeft(Math.floor(data.timeLeft / 1000));
           }
         } else {
           setIsSoldOut(false);
           setTimeLeft(0);
         }
-        
-        // Als we aanvullende data nodig hebben, gebruik de andere API route
-        const data = await fetchApi('/api/mint');
-        console.log('Aanvullende batch data:', data);
-        
-        if (data && Array.isArray(data.batches)) {
-          const currentBatchData = data.batches.find((b: { id: number }) => b.id === currentBatch);
-          
-          // Update tigers count - prefer direct mintedTigers value if available
-          if (currentBatchData) {
-            // Alleen gebruiken als we het nog niet hebben van de eerste API aanroep
-            if (currentBatchData.mintedTigers !== undefined && !currentBatchData.mintedTigers) {
-              setMintedTigers(currentBatchData.mintedTigers);
-              
-              // Total tigers is ordinals property
-              setTotalTigers(currentBatchData.ordinals || 66);
-            }
-          }
-        }
-        
-        setLoading(false);
+
+        const mintedTigersCount = data.mintedTigers || 0;
+        const totalTigersCount = data.totalTigers || 66;
+        setMintedTigers(mintedTigersCount);
+        setTotalTigers(totalTigersCount);
       } catch (error) {
-        console.error('Error fetching batch info:', error);
+        console.error('Error fetching current batch:', error);
+      } finally {
         setLoading(false);
       }
     };
 
-    // Initial fetch
-    fetchBatchInfo();
-
-    // Set up polling intervals
-    const batchInterval = setInterval(fetchBatchInfo, 5000);
-    
-    // Update countdown every second if we're in sold-out state
-    const countdownInterval = setInterval(() => {
-      if (isSoldOut && timeLeft > 0) {
-        setTimeLeft(prev => Math.max(0, prev - 1));
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(batchInterval);
-      clearInterval(countdownInterval);
-    };
-  }, [currentBatch, isSoldOut, timeLeft]);
-
-  // Add timer effect
-  useEffect(() => {
     let timerInterval: NodeJS.Timeout;
+    let checkCooldownInterval: NodeJS.Timeout;
 
     const checkMintStartTime = async () => {
       try {
@@ -167,16 +111,54 @@ export default function HomePage() {
       }
     };
 
-    // Initial check
+    // Add function to check cooldown and advance batch if needed
+    const checkCooldownAndAdvance = async () => {
+      try {
+        console.log("Checking cooldown and advance batch status...");
+        const response = await fetch('/api/check-cooldown-and-advance');
+        const data = await response.json();
+        
+        console.log("Cooldown check response:", data);
+        
+        // If the batch was advanced, refresh the batch info
+        if (data.status === 'advanced') {
+          console.log(`Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
+          // Re-fetch batch info instead of calling fetchBatchInfo
+          fetchBatchInfo();
+        } else if (data.status === 'cooldown') {
+          console.log(`Batch ${data.batch} in cooldown. ${Math.ceil(data.timeLeft / 1000 / 60)} minutes left`);
+        }
+      } catch (error) {
+        console.error('Error checking cooldown and advance:', error);
+      }
+    };
+
+    // Initial checks
+    fetchBatchInfo();
     checkMintStartTime();
+    checkCooldownAndAdvance();
+    
+    // Set up intervals
+    const batchInterval = setInterval(fetchBatchInfo, 30000);
+    const countdownInterval = setInterval(() => {
+      if (isSoldOut && timeLeft > 0) {
+        setTimeLeft(prev => Math.max(0, prev - 1));
+      }
+    }, 1000);
+    checkCooldownInterval = setInterval(checkCooldownAndAdvance, 15000);
 
     // Cleanup function
     return () => {
+      clearInterval(batchInterval);
+      clearInterval(countdownInterval);
       if (timerInterval) {
         clearInterval(timerInterval);
       }
+      if (checkCooldownInterval) {
+        clearInterval(checkCooldownInterval);
+      }
     };
-  }, []); // Only run once on mount
+  }, [isSoldOut, timeLeft]); // Dependencies updated
 
   // Format time function
   const formatTimeLeft = (milliseconds: number) => {

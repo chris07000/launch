@@ -62,41 +62,19 @@ export default function Home() {
   // Fetch data from API
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        console.log('Ophalen batch info op mintpagina...');
-        
-        // Vervang de externe URL door directe API route call
-        const response = await fetch('/api/mint/current-batch');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Ontvangen current-batch data op mintpagina:', data);
-        
-        // Direct de mintedTigers gebruiken van de API
-        if (data.mintedTigers !== undefined) {
-          // Deze data rechtstreeks tonen in de UI
-          console.log(`Direct mintedTigers uit API: ${data.mintedTigers}`);
-        }
-        
-        // Aanvullende data ophalen
+        // Fetch batches
         const batchesResponse = await fetch('/api/mint');
-        if (!batchesResponse.ok) {
-          throw new Error(`HTTP error ${batchesResponse.status}`);
-        }
-        
         const batchesData = await batchesResponse.json();
-        console.log('Ontvangen batch data op mintpagina:', batchesData);
         
-        if (batchesData.batches && Array.isArray(batchesData.batches)) {
-          console.log('Eerste batch mintedTigers:', batchesData.batches[0]?.mintedTigers);
+        if (batchesData.batches) {
           setBatches(batchesData.batches);
-        } else {
-          console.log('Geen geldige batches data ontvangen');
         }
+        
+        // Fetch current batch status
+        const response = await fetch('/api/mint/current-batch');
+        const data = await response.json();
         
         // Store the current batch and batches data
         setCurrentBatch(data.currentBatch || batchesData.currentBatch);
@@ -181,12 +159,45 @@ export default function Home() {
       }
     };
     
+    // Function to check cooldown and advance batch if needed
+    const checkCooldownAndAdvance = async () => {
+      try {
+        console.log("Mint page - Checking cooldown and advance batch status...");
+        const response = await fetch('/api/check-cooldown-and-advance');
+        const data = await response.json();
+        
+        console.log("Mint page - Cooldown check response:", data);
+        
+        // If the batch was advanced, refresh the batch info
+        if (data.status === 'advanced') {
+          console.log(`Mint page - Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
+          // Refresh data completely
+          fetchData();
+        } else if (data.status === 'cooldown') {
+          console.log(`Mint page - Batch ${data.batch} in cooldown. ${Math.ceil(data.timeLeft / 1000 / 60)} minutes left`);
+          // Update timer if needed
+          if (data.timeLeft && data.timeLeft > 0) {
+            setTimeLeft(Math.floor(data.timeLeft / 1000));
+          }
+        }
+      } catch (error) {
+        console.error('Error checking cooldown and advance:', error);
+      }
+    };
+    
     fetchData();
     
-    // Check status every 30 seconds
-    const intervalId = setInterval(checkBatchStatus, 30000);
+    // Initial check for cooldown
+    checkCooldownAndAdvance();
     
-    return () => clearInterval(intervalId);
+    // Set up intervals
+    const statusIntervalId = setInterval(checkBatchStatus, 30000);
+    const cooldownIntervalId = setInterval(checkCooldownAndAdvance, 15000);
+    
+    return () => {
+      clearInterval(statusIntervalId);
+      clearInterval(cooldownIntervalId);
+    };
   }, []);
 
   // Format time function
