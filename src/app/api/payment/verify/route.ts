@@ -54,7 +54,14 @@ async function checkBitcoinPayment(
   orderId: string
 ): Promise<boolean> {
   try {
+    // Log voor debugging
+    console.log(`Starting checkBitcoinPayment for ${address}`);
+    console.log(`Expected amount: ${expectedAmountBtc} BTC`);
+    console.log(`Order created at: ${orderCreatedAt.toISOString()}`);
+    console.log(`Order ID: ${orderId}`);
+    
     // Mempool.space API gebruiken om transacties te controleren
+    console.log(`Fetching transactions from mempool.space API for address: ${address}`);
     const response = await fetch(`https://mempool.space/api/address/${address}/txs`);
     
     if (!response.ok) {
@@ -63,18 +70,16 @@ async function checkBitcoinPayment(
     }
     
     const transactions = await response.json();
+    console.log(`API response received:`, JSON.stringify(transactions).substring(0, 500) + '...');
     
     // Geen transacties gevonden
     if (!Array.isArray(transactions) || transactions.length === 0) {
+      console.log(`No transactions found for address ${address}`);
       return false;
     }
     
     const expectedAmountSats = Math.round(expectedAmountBtc * 100000000);
-    
-    // Log voor debugging
-    console.log(`Checking transactions for ${address}`);
-    console.log(`Expected amount: ${expectedAmountBtc} BTC (${expectedAmountSats} sats)`);
-    console.log(`Order created at: ${orderCreatedAt.toISOString()}`);
+    console.log(`Expected amount in satoshis: ${expectedAmountSats}`);
     console.log(`Found ${transactions.length} transactions`);
     
     // Keep track of total received amount
@@ -82,8 +87,12 @@ async function checkBitcoinPayment(
     
     // Converteer orderCreatedAt naar timestamp
     const orderTimestamp = orderCreatedAt.getTime();
+    console.log(`Order timestamp: ${orderTimestamp}`);
     
+    // Loop door elke transactie
     for (const tx of transactions) {
+      console.log(`Processing transaction: ${tx.txid}`);
+      
       // Skip if transaction is already used
       const isUsed = await isTransactionUsed(tx.txid);
       if (isUsed) {
@@ -91,8 +100,22 @@ async function checkBitcoinPayment(
         continue;
       }
       
-      // Get transaction time (either block time or first seen time)
-      const txTime = tx.status.block_time ? tx.status.block_time * 1000 : tx.firstSeen * 1000;
+      // Get transaction time (try different fields)
+      let txTime = Date.now(); // Default to now if we can't determine actual time
+      
+      if (tx.status && tx.status.block_time) {
+        // Block time is in seconds, convert to ms
+        txTime = tx.status.block_time * 1000;
+        console.log(`Using block_time: ${new Date(txTime).toISOString()}`);
+      } else if (tx.firstSeen) {
+        // firstSeen might be in ms or seconds
+        txTime = tx.firstSeen > 1600000000000 ? tx.firstSeen : tx.firstSeen * 1000;
+        console.log(`Using firstSeen: ${new Date(txTime).toISOString()}`);
+      } else if (tx.time) {
+        // Some APIs use 'time' field
+        txTime = tx.time > 1600000000000 ? tx.time : tx.time * 1000;
+        console.log(`Using time: ${new Date(txTime).toISOString()}`);
+      }
       
       // Skip transactions from before the order was created
       if (txTime < orderTimestamp) {
@@ -102,30 +125,60 @@ async function checkBitcoinPayment(
       
       // Controleer outputs om het betaalde bedrag te vinden
       let txAmount = 0;
-      for (const output of tx.vout) {
-        if (output.scriptpubkey_address === address) {
-          const receivedSats = output.value;
-          console.log(`Found payment output: ${receivedSats} sats to ${address}`);
-          txAmount += receivedSats;
+      
+      // Handle different API formats
+      if (tx.vout && Array.isArray(tx.vout)) {
+        for (const output of tx.vout) {
+          // Try different field names for the address
+          const outputAddress = output.scriptpubkey_address || 
+                              output.scriptPubKeyAddress || 
+                              (output.scriptpubkey && output.scriptpubkey.address) ||
+                              output.address;
+                              
+          // Try different field names for the value
+          const value = output.value || output.valueSat || output.amount || 0;
+          
+          if (outputAddress === address) {
+            console.log(`Found payment output: ${value} sats to ${address}`);
+            txAmount += Number(value);
+          }
+        }
+      } else if (tx.outputs && Array.isArray(tx.outputs)) {
+        // Alternative API format
+        for (const output of tx.outputs) {
+          const outputAddress = output.address || 
+                             (output.scriptpubkey && output.scriptpubkey.address);
+          const value = output.value || output.amount || 0;
+          
+          if (outputAddress === address) {
+            console.log(`Found payment output: ${value} sats to ${address}`);
+            txAmount += Number(value);
+          }
         }
       }
       
       // Als deze transactie een betaling bevat, markeer als gebruikt
       if (txAmount > 0) {
+        console.log(`Transaction ${tx.txid} has payment of ${txAmount} sats`);
         await markTransactionAsUsed(tx.txid, orderId, txAmount);
         totalReceivedSats += txAmount;
+      } else {
+        console.log(`Transaction ${tx.txid} has no payments to our address`);
       }
     }
     
     console.log(`Total received: ${totalReceivedSats} sats (expected: ${expectedAmountSats} sats)`);
     
     // Check if we received the full expected amount
-    if (totalReceivedSats >= expectedAmountSats) {
-      console.log(`Payment verified! Received ${totalReceivedSats} sats`);
+    // Allow a small margin of error (1%)
+    const minAcceptableAmount = expectedAmountSats * 0.99;
+    if (totalReceivedSats >= minAcceptableAmount) {
+      console.log(`Payment verified! Received ${totalReceivedSats} sats (needed at least ${minAcceptableAmount})`);
       return true;
     }
     
     // Geen geldige betaling gevonden
+    console.log(`Payment verification failed. Received ${totalReceivedSats} < ${minAcceptableAmount} required`);
     return false;
   } catch (error) {
     console.error('Error checking Bitcoin payment:', error);
