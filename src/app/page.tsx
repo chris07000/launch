@@ -432,31 +432,67 @@ export default function HomePage() {
 
               {/* Sold Out Status */}
               {isSoldOut && (
-                <div style={{
+                <div className="sold-out-container" style={{
                   marginBottom: '20px',
-                  padding: '16px',
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  border: '2px solid #ffd700',
-                  color: '#ffd700',
+                  padding: '15px',
+                  background: 'linear-gradient(to right, #000000, #111111)',
+                  border: 'none',
+                  borderLeft: '4px solid #ffd700',
+                  color: 'white',
                   textAlign: 'center',
-                  borderRadius: '2px',
-                  boxShadow: '0 0 10px rgba(255, 215, 0, 0.2)'
+                  borderRadius: '0 4px 4px 0',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
+                  {/* Gold accent at top */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '1px',
+                    background: 'linear-gradient(to right, transparent, #ffd700, transparent)'
+                  }}></div>
+                  
                   <div style={{ 
                     fontSize: '16px', 
-                    fontWeight: 'bold',
-                    marginBottom: '5px',
-                    letterSpacing: '1px'
+                    fontWeight: 'bold', 
+                    marginBottom: '8px',
+                    letterSpacing: '2px',
+                    color: '#ffd700'
                   }}>
                     BATCH {currentBatch} SOLD OUT
                   </div>
+                  
                   <div style={{ 
-                    color: '#fff',
-                    fontSize: '14px',
-                    opacity: '0.8'
+                    fontSize: '13px',
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
                   }}>
-                    Next batch opens in: {formatTimeLeft(timeLeft * 1000)}
+                    <span style={{ opacity: 0.7 }}>Next batch opens in:</span> 
+                    <span style={{ 
+                      fontFamily: 'monospace', 
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      padding: '2px 6px',
+                      borderRadius: '2px',
+                      letterSpacing: '1px'
+                    }}>
+                      {formatTimeLeft(timeLeft * 1000)}
+                    </span>
                   </div>
+                  
+                  {/* Gold accent at bottom */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '1px',
+                    background: 'linear-gradient(to right, transparent, #ffd700, transparent)'
+                  }}></div>
                 </div>
               )}
 
