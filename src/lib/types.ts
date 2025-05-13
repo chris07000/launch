@@ -19,10 +19,11 @@ export interface Order {
 export interface BatchConfig {
   id: number;
   price: number;
-  maxWallets: number;
+  maxWallets?: number;
   mintedWallets: number;
   mintedTigers?: number;
   ordinals: number;
+  totalTigers?: number;
   isSoldOut: boolean;
   isFCFS?: boolean;
 }

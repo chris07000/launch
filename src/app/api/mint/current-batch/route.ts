@@ -24,8 +24,9 @@ export async function OPTIONS() {
 interface CurrentBatchResponse {
   currentBatch: number;
   price: number;
-  available: number;
-  maxWallets: number;
+  mintedTigers: number;      // Aantal geminte tigers
+  totalTigers: number;       // Totaal aantal tigers in batch
+  availableTigers: number;   // Beschikbare tigers
   soldOut: boolean;
 }
 
@@ -101,11 +102,20 @@ export async function GET() {
       });
     }
     
+    // Bereken het aantal tigers
+    const mintedTigers = currentBatchInfo.mintedTigers !== undefined 
+      ? currentBatchInfo.mintedTigers 
+      : currentBatchInfo.mintedWallets * 2;
+    
+    const totalTigers = currentBatchInfo.ordinals;
+    const availableTigers = totalTigers - mintedTigers;
+    
     const response: CurrentBatchResponse = {
       currentBatch: currentBatchInfo.id,
       price: currentBatchInfo.price,
-      available: currentBatchInfo.maxWallets - currentBatchInfo.mintedWallets,
-      maxWallets: currentBatchInfo.maxWallets,
+      mintedTigers: mintedTigers,
+      totalTigers: totalTigers,
+      availableTigers: availableTigers,
       soldOut: currentBatchInfo.isSoldOut
     };
     
