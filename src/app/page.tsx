@@ -19,6 +19,11 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [checkResult, setCheckResult] = useState('');
   const [timeToMint, setTimeToMint] = useState<number | null>(null);
+  const [cachedMintedTigers, setCachedMintedTigers] = useState<number>(0);
+  const [cachedTotalTigers, setCachedTotalTigers] = useState<number>(66);
+  const [progressPercentage, setProgressPercentage] = useState<number>(0);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
+  const [formattedTimeLeft, setFormattedTimeLeft] = useState<string>('0m 0s');
   const router = useRouter();
 
   // Detect mobile device
@@ -66,6 +71,14 @@ export default function HomePage() {
         const totalTigersCount = data.totalTigers || 66;
         setMintedTigers(mintedTigersCount);
         setTotalTigers(totalTigersCount);
+        
+        if (mintedTigersCount !== cachedMintedTigers || totalTigersCount !== cachedTotalTigers) {
+          setCachedMintedTigers(mintedTigersCount);
+          setCachedTotalTigers(totalTigersCount);
+          setProgressPercentage(Math.min(100, Math.round((mintedTigersCount / totalTigersCount) * 100)));
+        }
+        
+        setLastRefreshTime(Date.now());
       } catch (error) {
         console.error('Error fetching current batch:', error);
       } finally {
@@ -188,6 +201,23 @@ export default function HomePage() {
     
     return formattedTime;
   };
+
+  // Aparte effect voor time formatting zodat dit niet flikkert bij andere updates
+  useEffect(() => {
+    // Format time and update every second
+    const updateFormattedTime = () => {
+      setFormattedTimeLeft(formatTimeLeft(timeLeft * 1000));
+    };
+    
+    // Update initially
+    updateFormattedTime();
+    
+    // Set interval to update every second
+    const formattingInterval = setInterval(updateFormattedTime, 1000);
+    
+    // Clean up
+    return () => clearInterval(formattingInterval);
+  }, [timeLeft]);
 
   // Update the wallet check function
   const checkWallet = async () => {
@@ -462,7 +492,7 @@ export default function HomePage() {
                       borderRadius: '2px',
                       letterSpacing: '1px'
                     }}>
-                      {formatTimeLeft(timeLeft * 1000)}
+                      {formattedTimeLeft}
                     </span>
                   </div>
                   
@@ -492,7 +522,7 @@ export default function HomePage() {
                   overflow: 'hidden'
                 }}>
                   <div style={{ 
-                    width: `${loading ? 0 : (mintedTigers / totalTigers) * 100}%`,
+                    width: `${progressPercentage}%`,
                     height: '100%',
                     backgroundColor: isSoldOut ? '#ff0000' : '#ffd700',
                     transition: 'width 0.5s ease-in-out, background-color 0.3s ease'

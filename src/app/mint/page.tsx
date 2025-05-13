@@ -39,6 +39,12 @@ export default function Home() {
   const [isSoldOut, setIsSoldOut] = useState(false);
   const [soldOutTime, setSoldOutTime] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  
+  // Nieuwe state voor stabiele display
+  const [formattedTimeLeft, setFormattedTimeLeft] = useState<string>('');
+  const [progressPercentage, setProgressPercentage] = useState<number>(0);
+  const [cachedMintedTigers, setCachedMintedTigers] = useState<number>(0);
+  const [cachedTotalTigers, setCachedTotalTigers] = useState<number>(66);
 
   // Add this near the top with other state declarations
   const [lastBatchUpdate, setLastBatchUpdate] = useState<number>(0);
@@ -59,6 +65,27 @@ export default function Home() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
+  // Aparte effect voor time formatting zodat dit niet flikkert bij andere updates
+  useEffect(() => {
+    // Format time and update every second
+    const updateFormattedTime = () => {
+      if (timeLeft > 0) {
+        setFormattedTimeLeft(formatTimeLeft(timeLeft * 1000));
+      } else {
+        setFormattedTimeLeft('0m 0s');
+      }
+    };
+    
+    // Update initially
+    updateFormattedTime();
+    
+    // Set interval to update every second
+    const formattingInterval = setInterval(updateFormattedTime, 1000);
+    
+    // Clean up
+    return () => clearInterval(formattingInterval);
+  }, [timeLeft]);
+
   // Fetch data from API
   useEffect(() => {
     const fetchData = async () => {
@@ -77,13 +104,36 @@ export default function Home() {
         const data = await response.json();
         
         // Store the current batch and batches data
-        setCurrentBatch(data.currentBatch || batchesData.currentBatch);
+        if (data.currentBatch && data.currentBatch !== currentBatch) {
+          console.log(`Batch changed from ${currentBatch} to ${data.currentBatch}`);
+          setCurrentBatch(data.currentBatch);
+          
+          // Reset verification when batch changes
+          if (canMint && batchNumber !== data.currentBatch) {
+            setCanMint(false);
+            setBatchNumber(0);
+          }
+        }
+        
         setIsSoldOut(data.soldOut);
+        
+        // Update tiger counts and progress percentage
+        if (data.mintedTigers !== undefined && data.totalTigers !== undefined) {
+          // Alleen updaten bij echte veranderingen
+          if (data.mintedTigers !== cachedMintedTigers || data.totalTigers !== cachedTotalTigers) {
+            setCachedMintedTigers(data.mintedTigers);
+            setCachedTotalTigers(data.totalTigers);
+            setProgressPercentage(Math.min(100, Math.round((data.mintedTigers / data.totalTigers) * 100)));
+          }
+        }
         
         // For sold out batches, handle cooldown timer
         if (data.soldOut && data.timeLeft) {
-          setTimeLeft(data.timeLeft);
-          startCountdownTimer(data.timeLeft);
+          setTimeLeft(Math.floor(data.timeLeft / 1000));
+        } else if (!data.soldOut) {
+          setIsSoldOut(false);
+          setSoldOutTime(null);
+          setTimeLeft(0);
         }
       } catch (error) {
         console.error('Error fetching batch info:', error);
@@ -142,11 +192,7 @@ export default function Home() {
               setTimeLeft(0);
               
               // Fetch new batch info instead of refreshing the page
-              const batchResponse = await fetch('/api/mint');
-              const batchData = await batchResponse.json();
-              if (batchData.currentBatch) {
-                setCurrentBatch(batchData.currentBatch);
-              }
+              fetchData();
             }
           }
         } else {
@@ -171,6 +217,14 @@ export default function Home() {
         // If the batch was advanced, refresh the batch info
         if (data.status === 'advanced') {
           console.log(`Mint page - Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
+          
+          // Reset the verification state when the batch changes
+          if (canMint && batchNumber !== data.newBatch) {
+            setCanMint(false);
+            setBatchNumber(0);
+            setError('Batch has changed. Please verify your address again.');
+          }
+          
           // Refresh data completely
           fetchData();
         } else if (data.status === 'cooldown') {
@@ -198,7 +252,7 @@ export default function Home() {
       clearInterval(statusIntervalId);
       clearInterval(cooldownIntervalId);
     };
-  }, []);
+  }, [canMint, batchNumber, currentBatch]);
 
   // Format time function
   const formatTimeLeft = (milliseconds: number) => {
@@ -459,7 +513,12 @@ export default function Home() {
     );
   }
 
+  // Update convertCurrentBatchData function to use cached values for stability
   function convertCurrentBatchData() {
+    if (cachedMintedTigers !== undefined && cachedTotalTigers !== undefined) {
+      return `${cachedMintedTigers} / ${cachedTotalTigers} Tigers`;
+    }
+    
     const currentBatchData = batches.find(b => b.id === currentBatch);
     if (!currentBatchData) return "0 / 0";
     
@@ -669,7 +728,7 @@ export default function Home() {
                       fontWeight: 'bold',
                       color: '#ffd700'
                     }}>
-                      {formatTimeLeft(timeLeft)}
+                      {formattedTimeLeft || formatTimeLeft(timeLeft)}
                     </span>
                   </div>
                 </div>
@@ -707,16 +766,7 @@ export default function Home() {
                   overflow: 'hidden'
                 }}>
                   <div style={{ 
-                    width: `${loading ? 0 : (() => {
-                      const currentBatchData = batches.find(b => b.id === currentBatch);
-                      if (!currentBatchData) return 0;
-                      const minted = currentBatchData.mintedTigers !== undefined 
-                        ? currentBatchData.mintedTigers 
-                        : (currentBatchData.mintedWallets || 0) * 2;
-                      const total = currentBatchData.ordinals || 66;
-                      console.log(`Progress bar: ${minted}/${total} = ${(minted / total) * 100}%`);
-                      return (minted / total) * 100;
-                    })()}%`, 
+                    width: `${progressPercentage}%`, 
                     height: '100%', 
                     backgroundColor: '#ffd700',
                     transition: 'width 0.5s ease-in-out'
