@@ -1315,7 +1315,7 @@ export default function AdminPage() {
                                 <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '12px' }}>Batch #{batch.id}</div>
                                 
                                 <div style={{ fontSize: '10px', marginBottom: '4px' }}>
-                                  <span style={{ color: '#aaa' }}>Prijs:</span> ${batch.price.toFixed(2)}
+                                  <span style={{ color: '#aaa' }}>Prijs:</span> ${typeof batch.price === 'number' ? batch.price.toFixed(2) : batch.price}
                                 </div>
                                 
                                 <div style={{ fontSize: '10px', marginBottom: '8px' }}>
@@ -2028,7 +2028,7 @@ export default function AdminPage() {
                               >
                     {dashboardData?.batches?.map((batch: any) => (
                                   <option key={batch.id} value={batch.id}>
-                                    Batch #{batch.id} - ${batch.price.toFixed(2)}
+                                    Batch #{batch.id} - ${typeof batch.price === 'number' ? batch.price.toFixed(2) : batch.price}
                                   </option>
                                 ))}
                               </select>
