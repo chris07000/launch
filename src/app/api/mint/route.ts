@@ -3,6 +3,14 @@ import * as storage from '@/lib/storage-wrapper-db-only';
 
 export const dynamic = 'force-dynamic';
 
+// BTC/USD koers voor conversie
+const BTC_TO_USD_RATE = parseInt(process.env.BTC_TO_USD_RATE || '40000', 10);
+
+// Functie voor USD naar BTC conversie
+function usdToBtc(usdAmount: number): number {
+  return usdAmount / BTC_TO_USD_RATE;
+}
+
 // Voeg een helper functie toe voor CORS headers
 function corsHeaders() {
   return {
@@ -63,15 +71,23 @@ async function createMintOrder(btcAddress: string, quantity: number, batchId: nu
   // Generate a unique payment reference
   const paymentReference = Math.random().toString(36).substring(2, 15);
   
+  // Calculate USD and BTC amounts
+  const pricePerUnitUsd = batch.price;
+  const totalPriceUsd = pricePerUnitUsd * quantity;
+  const pricePerUnitBtc = usdToBtc(pricePerUnitUsd);
+  const totalPriceBtc = usdToBtc(totalPriceUsd);
+  
+  console.log(`Creating order with BTC price: ${totalPriceBtc} (${totalPriceUsd} USD)`);
+  
   // Create order
   const order: storage.Order = {
     id: `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     btcAddress,
     quantity,
-    totalPrice: batch.price * quantity,
-    totalPriceUsd: batch.price * quantity,
-    pricePerUnit: batch.price,
-    pricePerUnitBtc: 0.00001, // Placeholder, would be calculated from real BTC rate
+    totalPrice: totalPriceBtc,
+    totalPriceUsd: totalPriceUsd,
+    pricePerUnit: pricePerUnitUsd,
+    pricePerUnitBtc: pricePerUnitBtc,
     batchId,
     paymentAddress,
     paymentReference,
@@ -89,7 +105,11 @@ async function createMintOrder(btcAddress: string, quantity: number, batchId: nu
   // Save orders
   await storage.saveOrders(orders);
   
-  return order;
+  return {
+    ...order,
+    totalPriceBtc, // Expliciete BTC bedragen toevoegen aan de response
+    pricePerUnitBtc
+  };
 }
 
 export async function GET(request: NextRequest) {
