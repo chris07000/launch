@@ -425,7 +425,7 @@ export default function HomePage() {
                     color: '#ffd700',
                     fontSize: '14px'
                   }}>
-                    Next batch opens in: {Math.floor(timeLeft / 60)}m {timeLeft % 60}s
+                    Next batch opens in: {formatTimeLeft(timeLeft * 1000)}
                   </div>
                 </div>
               )}

@@ -117,16 +117,50 @@ export default function Home() {
     // Function to check batch status
     const checkBatchStatus = async () => {
       try {
-        const response = await fetch('/api/mint/current-batch');
-        if (response.ok) {
-          const data = await response.json();
-          setCurrentBatch(data.currentBatch);
-          setIsSoldOut(data.soldOut);
-          
-          if (data.soldOut && data.timeLeft) {
-            setTimeLeft(data.timeLeft);
-            startCountdownTimer(data.timeLeft);
+        // Check current batch status
+        const currentBatchResponse = await fetch('/api/mint/current-batch');
+        const currentBatchData = await currentBatchResponse.json();
+        
+        // Update current batch
+        if (currentBatchData.currentBatch) {
+          setCurrentBatch(currentBatchData.currentBatch);
+        }
+        
+        if (currentBatchData.soldOutAt) {
+          // Gebruik de timeLeft en cooldownDuration uit API
+          if (currentBatchData.timeLeft) {
+            setIsSoldOut(true);
+            setSoldOutTime(currentBatchData.soldOutAt);
+            setTimeLeft(Math.floor(currentBatchData.timeLeft / 1000)); // Convert ms to seconds
+          } else {
+            const now = Date.now();
+            // Gebruik cooldownDuration uit API of default naar 15 minuten als fallback
+            const cooldownDuration = currentBatchData.cooldownDuration || (15 * 60 * 1000);
+            const timeSinceSoldOut = now - currentBatchData.soldOutAt;
+            const timeLeftMs = Math.max(0, cooldownDuration - timeSinceSoldOut);
+            
+            if (timeLeftMs > 0) {
+              setIsSoldOut(true);
+              setSoldOutTime(currentBatchData.soldOutAt);
+              setTimeLeft(Math.floor(timeLeftMs / 1000));
+            } else {
+              // If display period is over, clear sold out status
+              setIsSoldOut(false);
+              setSoldOutTime(null);
+              setTimeLeft(0);
+              
+              // Fetch new batch info instead of refreshing the page
+              const batchResponse = await fetch('/api/mint');
+              const batchData = await batchResponse.json();
+              if (batchData.currentBatch) {
+                setCurrentBatch(batchData.currentBatch);
+              }
+            }
           }
+        } else {
+          setIsSoldOut(false);
+          setSoldOutTime(null);
+          setTimeLeft(0);
         }
       } catch (error) {
         console.error('Error checking batch status:', error);
@@ -141,89 +175,23 @@ export default function Home() {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Modify the batch status check effect
-  useEffect(() => {
-    const checkBatchStatus = async () => {
-      try {
-        // Check current batch status
-        const currentBatchResponse = await fetch('/api/mint/current-batch');
-        const currentBatchData = await currentBatchResponse.json();
-        
-        // Update current batch
-        if (currentBatchData.currentBatch) {
-          setCurrentBatch(currentBatchData.currentBatch);
-        }
-        
-        if (currentBatchData.soldOutAt) {
-          const now = Date.now();
-          const timeSinceSoldOut = now - currentBatchData.soldOutAt;
-          const timeLeftMs = Math.max(0, (15 * 60 * 1000) - timeSinceSoldOut);
-          
-          // Only set sold out if we're still within the display period
-          if (timeLeftMs > 0) {
-            setIsSoldOut(true);
-            setSoldOutTime(currentBatchData.soldOutAt);
-            setTimeLeft(Math.floor(timeLeftMs / 1000));
-          } else {
-            // If display period is over, clear sold out status
-            setIsSoldOut(false);
-            setSoldOutTime(null);
-            setTimeLeft(0);
-            
-            // Fetch new batch info instead of refreshing the page
-            const batchResponse = await fetch('/api/mint');
-            const batchData = await batchResponse.json();
-            if (batchData.currentBatch) {
-              setCurrentBatch(batchData.currentBatch);
-            }
-          }
-        } else {
-          setIsSoldOut(false);
-          setSoldOutTime(null);
-          setTimeLeft(0);
-        }
-      } catch (error) {
-        console.error('Error checking batch status:', error);
-      }
-    };
-
-    // Check immediately and then every 10 seconds
-    checkBatchStatus();
-    const interval = setInterval(checkBatchStatus, 10000);
-
-    // Update countdown every second if we're in sold-out state
-    const countdownInterval = setInterval(() => {
-      if (soldOutTime) {
-        const now = Date.now();
-        const timeSinceSoldOut = now - soldOutTime;
-        const timeLeftMs = Math.max(0, (15 * 60 * 1000) - timeSinceSoldOut);
-        
-        if (timeLeftMs > 0) {
-          setTimeLeft(Math.floor(timeLeftMs / 1000));
-        } else {
-          // Instead of refreshing the page, clear the sold-out state
-          setIsSoldOut(false);
-          setSoldOutTime(null);
-          setTimeLeft(0);
-          
-          // Fetch new batch info
-          fetch('/api/mint')
-            .then(response => response.json())
-            .then(data => {
-              if (data.currentBatch) {
-                setCurrentBatch(data.currentBatch);
-              }
-            })
-            .catch(error => console.error('Error fetching new batch:', error));
-        }
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(countdownInterval);
-    };
-  }, [soldOutTime]);
+  // Format time function
+  const formatTimeLeft = (ms: number) => {
+    if (ms <= 0) return '0s';
+    
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+    
+    let timeString = '';
+    if (days > 0) timeString += `${days}d `;
+    if (hours > 0) timeString += `${hours}h `;
+    if (minutes > 0) timeString += `${minutes}m `;
+    timeString += `${seconds}s`;
+    
+    return timeString;
+  };
 
   // Effect voor de sold out timer
   useEffect(() => {
@@ -604,11 +572,22 @@ export default function Home() {
               
               {/* Display sold out message if batch is sold out */}
               {isSoldOut && (
-                <div className="text-center mt-4">
-                  <h2 className="text-red-500 text-2xl font-bold mb-2">BATCH {currentBatch} SOLD OUT!</h2>
-                  <p className="text-gray-400">
-                    Next batch opens in: {Math.floor(timeLeft / 60)}m {timeLeft % 60}s
-                  </p>
+                <div style={{
+                  width: '100%',
+                  marginBottom: '24px',
+                  padding: '12px 16px',
+                  backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                  border: '2px solid #ff0000',
+                  color: '#ff0000',
+                  textAlign: 'center',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    BATCH #{currentBatch} SOLD OUT
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#ffd700' }}>
+                    Next batch opens in: {formatTimeLeft(timeLeft * 1000)}
+                  </div>
                 </div>
               )}
 
