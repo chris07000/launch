@@ -27,16 +27,20 @@ export async function POST(request: Request) {
     const oldValue = batches[batchIndex].mintedWallets;
     batches[batchIndex].mintedWallets = Number(mintedWallets);
     
-    // Als mintedWallets strikt gelijk is aan maxWallets, markeer als soldOut
-    // Voeg een speciale check toe om zeker te zijn dat 65/66 niet als uitverkocht wordt gemarkeerd
-    if (Number(mintedWallets) >= batches[batchIndex].maxWallets) {
+    // Bereken het totale aantal geminte tigers (2 per wallet)
+    const totalMintedTigers = Number(mintedWallets) * 2;
+    const totalTigersInBatch = batches[batchIndex].ordinals;
+    
+    console.log(`Batch ${batchId}: ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
+    
+    // Alleen sold out als ALLE tigers zijn gemint
+    if (totalMintedTigers >= totalTigersInBatch) {
       batches[batchIndex].isSoldOut = true;
-      console.log(`Batch ${batchId} is nu gemarkeerd als sold out`);
+      console.log(`Batch ${batchId} is nu gemarkeerd als sold out (alle ${totalTigersInBatch} tigers zijn gemint)`);
     } else {
-      // Zorg ervoor dat 65/66 niet als uitverkocht wordt gemarkeerd
-      // en dat de batch status teruggedraaid wordt als het aantal onder max komt
+      // Batch is niet uitverkocht als er nog tigers beschikbaar zijn
       batches[batchIndex].isSoldOut = false;
-      console.log(`Batch ${batchId} is niet meer sold out, ${mintedWallets}/${batches[batchIndex].maxWallets}`);
+      console.log(`Batch ${batchId} is niet sold out, ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
     }
     
     await storage.saveBatches(batches);
@@ -64,6 +68,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Batch ${batchId} mintedWallets updated from ${oldValue} to ${mintedWallets}`,
+      totalMintedTigers: totalMintedTigers,
+      totalTigersInBatch: totalTigersInBatch,
       isSoldOut: batches[batchIndex].isSoldOut,
       maxWallets: batches[batchIndex].maxWallets
     });

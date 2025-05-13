@@ -128,6 +128,11 @@ export async function markBatchAsSoldOut(batchId: number) {
     if (batchIndex !== -1) {
       batches[batchIndex].isSoldOut = true;
       await storage.saveBatches(batches);
+      
+      // Log meer details over het aantal tigers
+      const totalMintedTigers = batches[batchIndex].mintedWallets * 2;
+      const totalTigersInBatch = batches[batchIndex].ordinals;
+      console.log(`Batch ${batchId} gemarkeerd als sold out: ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
     }
     
     console.log(`Batch ${batchId} marked as sold out at ${new Date().toISOString()}`);
@@ -609,9 +614,16 @@ export async function updateOrderStatus(orderId: string, status: storage.Order['
       if (batchIndex !== -1) {
         batches[batchIndex].mintedWallets += 1;
         
-        // Check if batch is now sold out
-        if (batches[batchIndex].mintedWallets >= batches[batchIndex].maxWallets) {
+        // Bereken het totale aantal geminte tigers (2 per wallet)
+        const totalMintedTigers = batches[batchIndex].mintedWallets * 2;
+        const totalTigersInBatch = batches[batchIndex].ordinals;
+        
+        console.log(`Batch ${order.batchId}: ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
+        
+        // Check if batch is now sold out (alleen als ALLE tigers zijn gemint)
+        if (totalMintedTigers >= totalTigersInBatch) {
           batches[batchIndex].isSoldOut = true;
+          console.log(`Batch ${order.batchId} is nu gemarkeerd als sold out (alle ${totalTigersInBatch} tigers zijn gemint)`);
           await markBatchAsSoldOut(order.batchId);
         }
         
