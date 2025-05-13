@@ -58,66 +58,84 @@ export default function Home() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // Modify the batch loading effect
+  // Fetch data from API
   useEffect(() => {
-    let mounted = true;
-    let interval: NodeJS.Timeout;
-
     const fetchData = async () => {
       try {
-        // Only update if enough time has passed since last update
-        if (Date.now() - lastUpdate < 2000) {
-          return;
+        setLoading(true);
+        console.log('Fetching batch info...');
+        
+        // Vervang de externe URL door directe API route call
+        const response = await fetch('/api/mint/current-batch');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error ${response.status}`);
         }
-
-        const batchResponse = await fetch('/api/mint/current-batch');
-        const { currentBatch: newBatch } = await batchResponse.json();
         
-        // Gebruik de correcte API endpoint voor batches
-        const batchesResponse = await fetch('/api/mint');
-        const data = await batchesResponse.json();
-        console.log('Ontvangen batch data:', data); // Debug log
+        const data = await response.json();
+        console.log('Ontvangen batch data:', data);
         
-        if (mounted) {
-          // Update alleen als er echte veranderingen zijn
-          if (currentBatch !== newBatch) {
-            setCurrentBatch(newBatch);
-          }
-          
-          // Controleer of we een array van batches hebben ontvangen
-          if (data && Array.isArray(data.batches)) {
-            setBatches(data.batches);
-          } else {
-            console.log('Geen geldige batches data ontvangen:', data);
-            setBatches(batchesFallback);
-          }
-
-          setLoading(false);
-          setLastUpdate(Date.now());
+        // Store the current batch and batches data
+        setCurrentBatch(data.currentBatch);
+        setIsSoldOut(data.soldOut);
+        
+        // If there are batches, update the state
+        if (data.batches && Array.isArray(data.batches)) {
+          setBatches(data.batches);
+        }
+        
+        // For sold out batches, handle cooldown timer
+        if (data.soldOut && data.timeLeft) {
+          setTimeLeft(data.timeLeft);
+          startCountdownTimer(data.timeLeft);
         }
       } catch (error) {
-        console.error('Error bij ophalen batch data:', error);
-        // Als er een error is, gebruik de fallback data
-        if (mounted) {
-          setBatches(batchesFallback);
-          setLoading(false);
+        console.error('Error fetching batch info:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    // Helper function to start countdown timer
+    const startCountdownTimer = (seconds: number) => {
+      let remaining = seconds;
+      const timer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(timer);
+          checkBatchStatus();
+        } else {
+          setTimeLeft(remaining);
         }
+      }, 1000);
+    };
+    
+    // Function to check batch status
+    const checkBatchStatus = async () => {
+      try {
+        const response = await fetch('/api/mint/current-batch');
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentBatch(data.currentBatch);
+          setIsSoldOut(data.soldOut);
+          
+          if (data.soldOut && data.timeLeft) {
+            setTimeLeft(data.timeLeft);
+            startCountdownTimer(data.timeLeft);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking batch status:', error);
       }
     };
-
-    // Initial fetch
+    
     fetchData();
-
-    // Set up polling interval
-    interval = setInterval(fetchData, 5000);
-
-    return () => {
-      mounted = false;
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [currentBatch, lastUpdate]);
+    
+    // Check status every 30 seconds
+    const intervalId = setInterval(checkBatchStatus, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Modify the batch status check effect
   useEffect(() => {
@@ -259,7 +277,10 @@ export default function Home() {
   const maxTigersPerWallet = parseInt(process.env.MAX_TIGERS_PER_WALLET || '2', 10);
   
   // Add BTC price conversion helper
-  const usdToBtc = (usdAmount: number): string => {
+  const usdToBtc = (usdAmount: number | undefined): string => {
+    if (typeof usdAmount !== 'number') {
+      return '0.00000000'; // Return a valid string if not a number
+    }
     const btcPrice = 103000; // Current BTC price in USD
     return (usdAmount / btcPrice).toFixed(8); // Show 8 decimal places for BTC
   };

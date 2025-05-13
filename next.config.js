@@ -33,6 +33,14 @@ const nextConfig = {
           {
             key: 'Access-Control-Allow-Origin',
             value: '*'
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS'
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization'
           }
         ]
       }
@@ -65,7 +73,7 @@ const nextConfig = {
     PROJECT_BTC_WALLET: process.env.PROJECT_BTC_WALLET,
     PAYMENT_BTC_WALLET: process.env.PAYMENT_BTC_WALLET,
     BTC_TO_USD_RATE: process.env.BTC_TO_USD_RATE,
-    API_URL: process.env.API_URL,
+    API_URL: process.env.API_URL || '',
     BACKUP_SECRET: process.env.BACKUP_SECRET,
   }
 };

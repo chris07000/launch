@@ -3,6 +3,23 @@ import * as storage from '@/lib/storage-wrapper-db-only';
 
 export const dynamic = 'force-dynamic';
 
+// Voeg een helper functie toe voor CORS headers
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+// Voeg OPTIONS handler toe voor preflight requests
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: corsHeaders(),
+  });
+}
+
 // Function to get batch info
 async function getBatchInfo(batchId: number) {
   const batches = await storage.getBatches();
@@ -86,14 +103,20 @@ export async function GET(request: NextRequest) {
       const batchInfo = await getBatchInfo(parseInt(batchId, 10));
       return new Response(JSON.stringify(batchInfo), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders()
+        }
       });
     } else {
       // Alle batches ophalen
       const allBatches = await getAllBatches();
       return new Response(JSON.stringify(allBatches), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders()
+        }
       });
     }
   } catch (error: any) {
@@ -102,7 +125,10 @@ export async function GET(request: NextRequest) {
     console.error('GET /api/mint error:', errorMessage);
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders()
+      }
     });
   }
 }
@@ -116,14 +142,20 @@ export async function POST(request: NextRequest) {
     if (!btcAddress) {
       return new Response(JSON.stringify({ error: 'BTC address is required' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders()
+        }
       });
     }
 
     if (!quantity || quantity < 1) {
       return new Response(JSON.stringify({ error: 'Quantity must be at least 1' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders()
+        }
       });
     }
 
@@ -132,13 +164,19 @@ export async function POST(request: NextRequest) {
 
     return new Response(JSON.stringify(order), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders()
+      }
     });
   } catch (error: any) {
     console.error('Error creating mint order:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders()
+      }
     });
   }
 } 

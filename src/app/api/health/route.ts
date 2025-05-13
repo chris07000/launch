@@ -2,6 +2,23 @@ import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
 
+// Voeg een helper functie toe voor CORS headers
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+// Voeg OPTIONS handler toe voor preflight requests
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: corsHeaders(),
+  });
+}
+
 export async function GET() {
   const isVercel = process.env.VERCEL === '1';
   const checks = [];
@@ -31,7 +48,10 @@ export async function GET() {
       }
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders() 
+      }
     });
   } catch (error) {
     console.error('Health check failed:', error);
@@ -45,7 +65,10 @@ export async function GET() {
       }
     ), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...corsHeaders() 
+      }
     });
   }
 } 

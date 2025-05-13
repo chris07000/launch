@@ -1,13 +1,22 @@
 // Helper function to get the API URL
 export function getApiUrl(path: string): string {
-  const baseUrl = process.env.API_URL || 'https://www.tigerlaunchad.xyz';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '/';
   return `${baseUrl}${path}`;
 }
 
 // Helper function to make API calls
 export async function fetchApi(path: string, options: RequestInit = {}) {
   const url = getApiUrl(path);
-  const response = await fetch(url, options);
+  
+  const defaultOptions: RequestInit = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+  
+  const mergedOptions = { ...defaultOptions, ...options };
+  
+  const response = await fetch(url, mergedOptions);
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
