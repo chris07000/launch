@@ -434,20 +434,26 @@ export default function HomePage() {
               {isSoldOut && (
                 <div style={{
                   marginBottom: '20px',
-                  padding: '10px',
-                  backgroundColor: 'rgba(255, 0, 0, 0.1)',
-                  border: '1px solid #ff0000'
+                  padding: '16px',
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  border: '2px solid #ffd700',
+                  color: '#ffd700',
+                  textAlign: 'center',
+                  borderRadius: '2px',
+                  boxShadow: '0 0 10px rgba(255, 215, 0, 0.2)'
                 }}>
                   <div style={{ 
-                    color: '#ff0000',
-                    fontSize: '16px',
-                    marginBottom: '5px'
+                    fontSize: '16px', 
+                    fontWeight: 'bold',
+                    marginBottom: '5px',
+                    letterSpacing: '1px'
                   }}>
-                    BATCH {currentBatch} SOLD OUT!
+                    BATCH {currentBatch} SOLD OUT
                   </div>
                   <div style={{ 
-                    color: '#ffd700',
-                    fontSize: '14px'
+                    color: '#fff',
+                    fontSize: '14px',
+                    opacity: '0.8'
                   }}>
                     Next batch opens in: {formatTimeLeft(timeLeft * 1000)}
                   </div>

@@ -620,16 +620,17 @@ export default function Home() {
                   width: '100%',
                   marginBottom: '24px',
                   padding: '12px 16px',
-                  backgroundColor: 'rgba(255, 0, 0, 0.1)',
-                  border: '2px solid #ff0000',
-                  color: '#ff0000',
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  border: '2px solid #ffd700',
+                  color: '#ffd700',
                   textAlign: 'center',
-                  borderRadius: '4px'
+                  borderRadius: '2px',
+                  boxShadow: '0 0 10px rgba(255, 215, 0, 0.2)'
                 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px', letterSpacing: '1px' }}>
                     BATCH #{currentBatch} SOLD OUT
                   </div>
-                  <div style={{ fontSize: '12px', color: '#ffd700' }}>
+                  <div style={{ fontSize: '12px', color: '#fff', opacity: '0.8' }}>
                     Next batch opens in: {formatTimeLeft(timeLeft)}
                   </div>
                 </div>
