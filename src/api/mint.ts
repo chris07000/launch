@@ -614,10 +614,20 @@ export async function updateOrderStatus(orderId: string, status: storage.Order['
       const batchIndex = batches.findIndex(b => b.id === order.batchId);
       
       if (batchIndex !== -1) {
+        // Verhoog het aantal geminte tigers direct
+        const tigersInOrder = order.quantity * 2; // Elke order bevat 2 tigers
         batches[batchIndex].mintedWallets += 1;
         
-        // Bereken het totale aantal geminte tigers (2 per wallet)
-        const totalMintedTigers = batches[batchIndex].mintedWallets * 2;
+        // Update mintedTigers direct
+        if (batches[batchIndex].mintedTigers !== undefined) {
+          batches[batchIndex].mintedTigers += tigersInOrder;
+        } else {
+          // Als mintedTigers nog niet bestaat, maak deze aan
+          batches[batchIndex].mintedTigers = (batches[batchIndex].mintedWallets * 2);
+        }
+        
+        // Bereken het totale aantal geminte tigers
+        const totalMintedTigers = batches[batchIndex].mintedTigers;
         const totalTigersInBatch = batches[batchIndex].ordinals;
         
         console.log(`Batch ${order.batchId}: ${totalMintedTigers}/${totalTigersInBatch} tigers gemint`);
@@ -652,11 +662,22 @@ export async function getBatchInfo(batchId: number) {
       throw new Error(`Batch ${batchId} not found`);
     }
     
+    // Bereken het aantal tigers als de property niet bestaat
+    const mintedTigers = batch.mintedTigers !== undefined 
+      ? batch.mintedTigers 
+      : batch.mintedWallets * 2;
+    
+    // Bereken de totale aantal tigers in de batch
+    const totalTigers = batch.ordinals;
+    
     return {
       id: batch.id,
       price: batch.price,
       maxWallets: batch.maxWallets,
       mintedWallets: batch.mintedWallets,
+      mintedTigers: mintedTigers,
+      totalTigers: totalTigers,
+      availableTigers: totalTigers - mintedTigers,
       available: batch.maxWallets - batch.mintedWallets,
       isSoldOut: batch.isSoldOut,
       ordinals: batch.ordinals

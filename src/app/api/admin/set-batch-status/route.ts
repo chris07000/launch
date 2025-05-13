@@ -33,10 +33,10 @@ export async function POST(request: Request) {
     }
     
     // Update de batch waarden
-    const oldValue = batches[batchIndex].mintedWallets;
-    const oldTigers = oldValue * 2;
+    const oldTigers = batches[batchIndex].mintedTigers !== undefined 
+      ? batches[batchIndex].mintedTigers 
+      : batches[batchIndex].mintedWallets * 2;
     
-    // Converteer tigers naar wallets voor database opslag (1 wallet = 2 tigers)
     // Als we exact 65 tigers hebben, moeten we dat beschouwen als 66 (vol)
     const totalTigersInBatch = batches[batchIndex].ordinals;
     const isAlmostFull = Number(mintedTigers) >= totalTigersInBatch - 1;
@@ -59,6 +59,7 @@ export async function POST(request: Request) {
     }
     
     batches[batchIndex].mintedWallets = newWallets;
+    batches[batchIndex].mintedTigers = actualTigers;
     batches[batchIndex].isSoldOut = isSoldOut;
     
     console.log(`Batch ${batchId}: ${actualTigers}/${totalTigersInBatch} tigers gemint, isSoldOut: ${isSoldOut}`);

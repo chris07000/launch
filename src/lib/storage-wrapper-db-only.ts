@@ -143,10 +143,14 @@ export async function getBatches(): Promise<Batch[]> {
       
       console.log(`Batch ${row.id} price: ${row.price}, converted: ${price}, type: ${typeof price}`);
       
+      // Bereken mintedTigers op basis van mintedWallets
+      const mintedTigers = row.minted_tigers !== undefined ? row.minted_tigers : row.minted_wallets * 2;
+      
       return {
         id: row.id,
         price: price,
         mintedWallets: row.minted_wallets,
+        mintedTigers: mintedTigers,
         maxWallets: row.max_wallets,
         ordinals: row.ordinals,
         isSoldOut: row.is_sold_out,
@@ -162,20 +166,31 @@ export async function getBatches(): Promise<Batch[]> {
 // Save batches
 export async function saveBatches(batches: Batch[]): Promise<boolean> {
   try {
+    // Maak zeker dat de batches tabel de minted_tigers kolom heeft
+    await withRetry(async () =>
+      await sql`
+        ALTER TABLE batches ADD COLUMN IF NOT EXISTS minted_tigers INTEGER DEFAULT 0
+      `
+    );
+    
     // Gebruik UPSERT in plaats van TRUNCATE
     for (const batch of batches) {
+      // Zorg dat mintedTigers altijd aanwezig is, standaard wallets * 2
+      const mintedTigers = batch.mintedTigers !== undefined ? batch.mintedTigers : batch.mintedWallets * 2;
+      
       await withRetry(async () => 
         await sql`
           INSERT INTO batches (
-            id, price, minted_wallets, max_wallets, ordinals, is_sold_out, is_fcfs
+            id, price, minted_wallets, minted_tigers, max_wallets, ordinals, is_sold_out, is_fcfs
           ) VALUES (
-            ${batch.id}, ${batch.price}, ${batch.mintedWallets},
+            ${batch.id}, ${batch.price}, ${batch.mintedWallets}, ${mintedTigers},
             ${batch.maxWallets}, ${batch.ordinals}, ${batch.isSoldOut}, ${batch.isFCFS || false}
           )
           ON CONFLICT (id)
           DO UPDATE SET
             price = ${batch.price}, 
             minted_wallets = ${batch.mintedWallets},
+            minted_tigers = ${mintedTigers},
             max_wallets = ${batch.maxWallets}, 
             ordinals = ${batch.ordinals}, 
             is_sold_out = ${batch.isSoldOut}, 

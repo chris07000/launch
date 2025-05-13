@@ -21,6 +21,7 @@ export interface BatchConfig {
   price: number;
   maxWallets: number;
   mintedWallets: number;
+  mintedTigers?: number;
   ordinals: number;
   isSoldOut: boolean;
   isFCFS?: boolean;
