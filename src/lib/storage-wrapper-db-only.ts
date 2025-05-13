@@ -69,15 +69,25 @@ export async function saveOrders(orders: Order[]): Promise<boolean> {
 export async function getBatches(): Promise<Batch[]> {
   try {
     const { rows } = await sql`SELECT * FROM batches ORDER BY id`;
-    return rows.map(row => ({
-      id: row.id,
-      price: row.price,
-      mintedWallets: row.minted_wallets,
-      maxWallets: row.max_wallets,
-      ordinals: row.ordinals,
-      isSoldOut: row.is_sold_out,
-      isFCFS: row.is_fcfs || false
-    }));
+    console.log('Raw database batches:', rows);
+    
+    return rows.map(row => {
+      // Zorg ervoor dat de prijs correct wordt geconverteerd naar een nummer
+      const price = typeof row.price === 'string' ? parseFloat(row.price) : 
+                   typeof row.price === 'number' ? row.price : 0;
+      
+      console.log(`Batch ${row.id} price: ${row.price}, converted: ${price}, type: ${typeof price}`);
+      
+      return {
+        id: row.id,
+        price: price,
+        mintedWallets: row.minted_wallets,
+        maxWallets: row.max_wallets,
+        ordinals: row.ordinals,
+        isSoldOut: row.is_sold_out,
+        isFCFS: row.is_fcfs || false
+      };
+    });
   } catch (error) {
     console.error('Error getting batches:', error);
     return [];

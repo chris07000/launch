@@ -74,15 +74,19 @@ export default function Home() {
         
         const data = await response.json();
         console.log('Ontvangen batch data:', data);
+        console.log('Batches array:', data.batches);
+        
+        if (data.batches && Array.isArray(data.batches)) {
+          console.log('Eerste batch prijs:', data.batches[0]?.price, 'Type:', typeof data.batches[0]?.price);
+          console.log('Alle batch prijzen:', data.batches.map(b => ({ id: b.id, price: b.price, typeOfPrice: typeof b.price })));
+          setBatches(data.batches);
+        } else {
+          console.log('Geen geldige batches data ontvangen');
+        }
         
         // Store the current batch and batches data
         setCurrentBatch(data.currentBatch);
         setIsSoldOut(data.soldOut);
-        
-        // If there are batches, update the state
-        if (data.batches && Array.isArray(data.batches)) {
-          setBatches(data.batches);
-        }
         
         // For sold out batches, handle cooldown timer
         if (data.soldOut && data.timeLeft) {
