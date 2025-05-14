@@ -3,6 +3,7 @@ import * as storage from '@/lib/storage-wrapper-db-only';
 import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Add revalidate: 0 to prevent caching
 
 /**
  * Helper function to find the next available batch
@@ -81,6 +82,13 @@ function convertToMilliseconds(value: number, unit: string): number {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Add a small buffer period to prevent race conditions
+    const BUFFER_MS = 100;
+    
+    // Get priority parameter - use this when timer is nearly done to force check
+    const priority = request.nextUrl.searchParams.get('priority') === 'true';
+    const forceAdvance = request.nextUrl.searchParams.get('force') === 'true';
+    
     // Get the current batch info
     const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
     console.log(`Current batch: ${currentBatch}, soldOutAt: ${soldOutAt ? new Date(soldOutAt).toISOString() : 'not sold out'}`);
@@ -104,7 +112,12 @@ export async function GET(request: NextRequest) {
     console.log(`Time since sold out: ${timeSinceSoldOut}ms (${timeSinceSoldOut / 1000 / 60} minutes)`);
     
     // Check if cooldown period has elapsed
-    if (timeSinceSoldOut >= cooldownDuration) {
+    // Priority checks use a buffer to ensure we advance the batch even if a few MS remain
+    const shouldAdvance = priority 
+      ? timeSinceSoldOut >= (cooldownDuration - BUFFER_MS)
+      : timeSinceSoldOut >= cooldownDuration;
+    
+    if (shouldAdvance || forceAdvance) {
       // Find the next available batch
       const nextBatch = await findNextAvailableBatch(currentBatch);
       
@@ -115,13 +128,19 @@ export async function GET(request: NextRequest) {
           soldOutAt: null
         });
         
-        console.log(`Advanced to next batch: ${nextBatch}`);
+        console.log(`Advanced to next batch: ${nextBatch}${priority ? ' (priority check)' : ''}${forceAdvance ? ' (forced)' : ''}`);
         
         return NextResponse.json({
           previousBatch: currentBatch,
           newBatch: nextBatch,
           status: 'advanced',
+          priority: priority,
+          forced: forceAdvance,
           message: `Advanced to batch ${nextBatch}`
+        }, {
+          headers: {
+            'Cache-Control': 'no-store, max-age=0'
+          }
         });
       } else {
         // No next batch available, stay on current batch
@@ -129,6 +148,10 @@ export async function GET(request: NextRequest) {
           batch: currentBatch,
           status: 'no_next_batch',
           message: 'Cooldown period elapsed but no next batch available'
+        }, {
+          headers: {
+            'Cache-Control': 'no-store, max-age=0'
+          }
         });
       }
     } else {
@@ -142,6 +165,10 @@ export async function GET(request: NextRequest) {
         timeLeft: timeLeft,
         cooldownDuration: cooldownDuration,
         message: `Cooldown period not elapsed yet. ${Math.ceil(timeLeft / 1000 / 60)} minutes left`
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, max-age=0'
+        }
       });
     }
   } catch (error) {
@@ -149,6 +176,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       error: 'Failed to check cooldown',
       details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0'
+      }
+    });
   }
 } 

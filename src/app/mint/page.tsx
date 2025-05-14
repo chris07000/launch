@@ -206,10 +206,16 @@ export default function Home() {
     };
     
     // Function to check cooldown and advance batch if needed
-    const checkCooldownAndAdvance = async () => {
+    const checkCooldownAndAdvance = async (isPriority = false) => {
       try {
-        console.log("Mint page - Checking cooldown and advance batch status...");
-        const response = await fetch('/api/check-cooldown-and-advance');
+        const priorityParam = isPriority ? '?priority=true' : '';
+        console.log(`Mint page - Checking cooldown and advance batch status... ${isPriority ? '(PRIORITY CHECK)' : ''}`);
+        const response = await fetch(`/api/check-cooldown-and-advance${priorityParam}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
         const data = await response.json();
         
         console.log("Mint page - Cooldown check response:", data);
@@ -239,6 +245,15 @@ export default function Home() {
       }
     };
     
+    // Functie om te controleren op einde timer en dan direct actie te ondernemen
+    const checkTimerEnd = () => {
+      // Als timer bijna 0 is, forceer een check
+      if (isSoldOut && timeLeft <= 1) {
+        console.log("Mint page - Timer nearly zero, forcing batch check...");
+        checkCooldownAndAdvance();
+      }
+    };
+    
     fetchData();
     
     // Initial check for cooldown
@@ -248,11 +263,30 @@ export default function Home() {
     const statusIntervalId = setInterval(checkBatchStatus, 30000);
     const cooldownIntervalId = setInterval(checkCooldownAndAdvance, 15000);
     
+    // Extra interval voor het controleren van de timer die op 0 staat
+    const timerCheckInterval = setInterval(checkTimerEnd, 1000);
+    
+    // Extra timer voor het bijwerken van de countdown
+    const countdownIntervalId = setInterval(() => {
+      if (isSoldOut && timeLeft > 0) {
+        setTimeLeft(prev => {
+          const newValue = Math.max(0, prev - 1);
+          // Als we exact op 0 komen, check de batch status
+          if (newValue === 0) {
+            checkCooldownAndAdvance();
+          }
+          return newValue;
+        });
+      }
+    }, 1000);
+    
     return () => {
       clearInterval(statusIntervalId);
       clearInterval(cooldownIntervalId);
+      clearInterval(timerCheckInterval);
+      clearInterval(countdownIntervalId);
     };
-  }, [canMint, batchNumber, currentBatch]);
+  }, [canMint, batchNumber, currentBatch, isSoldOut, timeLeft]);
 
   // Format time function
   const formatTimeLeft = (milliseconds: number) => {

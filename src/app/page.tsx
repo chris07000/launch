@@ -88,6 +88,7 @@ export default function HomePage() {
 
     let timerInterval: NodeJS.Timeout;
     let checkCooldownInterval: NodeJS.Timeout;
+    let countdownCheckInterval: NodeJS.Timeout;
 
     const checkMintStartTime = async () => {
       try {
@@ -125,10 +126,16 @@ export default function HomePage() {
     };
 
     // Add function to check cooldown and advance batch if needed
-    const checkCooldownAndAdvance = async () => {
+    const checkCooldownAndAdvance = async (isPriority = false) => {
       try {
-        console.log("Checking cooldown and advance batch status...");
-        const response = await fetch('/api/check-cooldown-and-advance');
+        const priorityParam = isPriority ? '?priority=true' : '';
+        console.log(`Checking cooldown and advance batch status... ${isPriority ? '(PRIORITY CHECK)' : ''}`);
+        const response = await fetch(`/api/check-cooldown-and-advance${priorityParam}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
         const data = await response.json();
         
         console.log("Cooldown check response:", data);
@@ -146,6 +153,15 @@ export default function HomePage() {
       }
     };
 
+    // Functie om de countdown te checken en batch te verversen wanneer timer 0 bereikt
+    const checkCountdownStatus = () => {
+      // Als er nog 1 seconde of minder over is, forceer een check
+      if (isSoldOut && timeLeft <= 1) {
+        console.log("Timer nearly zero, forcing priority cooldown check...");
+        checkCooldownAndAdvance(true);
+      }
+    };
+
     // Initial checks
     fetchBatchInfo();
     checkMintStartTime();
@@ -156,14 +172,23 @@ export default function HomePage() {
     const countdownInterval = setInterval(() => {
       if (isSoldOut && timeLeft > 0) {
         setTimeLeft(prev => Math.max(0, prev - 1));
+        // Als we exact op 0 komen, forceer een check
+        if (timeLeft === 1) {
+          checkCooldownAndAdvance(true);
+        }
       }
     }, 1000);
+    
+    // Extra interval om elke seconde te checken of we aan het einde van de timer zijn
+    countdownCheckInterval = setInterval(checkCountdownStatus, 1000);
+    
     checkCooldownInterval = setInterval(checkCooldownAndAdvance, 15000);
 
     // Cleanup function
     return () => {
       clearInterval(batchInterval);
       clearInterval(countdownInterval);
+      clearInterval(countdownCheckInterval);
       if (timerInterval) {
         clearInterval(timerInterval);
       }
@@ -171,7 +196,7 @@ export default function HomePage() {
         clearInterval(checkCooldownInterval);
       }
     };
-  }, [isSoldOut, timeLeft]); // Dependencies updated
+  }, [isSoldOut, timeLeft]);
 
   // Format time function
   const formatTimeLeft = (milliseconds: number) => {
