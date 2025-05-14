@@ -1,5 +1,5 @@
-Last restart: 2024-07-12 16:15:00
-Current restart: 2024-07-12 17:00:00
+Last restart: 2024-07-12 17:30:00
+Current restart: 2024-07-12 18:00:00
 
 New improvements:
 - Added batch force reset API to reset batch 1
@@ -9,4 +9,5 @@ New improvements:
 - Fixed critical bug where batch is incorrectly marked as sold out with 0 tigers
 - Added extreme measures: Direct SQL updates to fix corrupted database state
 - Added EMERGENCY database reset API endpoint
-- Made wallet check auto-refresh batch status before checking 
+- Made wallet check auto-refresh batch status before checking
+- KRITISCHE UPDATE: Verbeterde batch reset API met uitgebreide debug logging 
