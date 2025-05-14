@@ -19,14 +19,14 @@ export async function GET(request: NextRequest) {
 
     const requestedBatchId = parseInt(batchIdParam, 10);
 
-    // STAP 1: Direct de whitelist check doen met SQL
+    // Direct whitelist check with SQL
     const whitelistResult = await sql`SELECT * FROM whitelist WHERE address = ${address}`;
     const whitelistEntry = whitelistResult.rows[0];
     const whitelistedBatchId = whitelistEntry ? whitelistEntry.batch_id : null;
     
     console.log(`Checking whitelist for ${address}: ${whitelistEntry ? 'FOUND for batch ' + whitelistedBatchId : 'NOT FOUND'}`);
     
-    // STAP 2: Batch informatie ophalen
+    // Get batch information
     const batchesResult = await sql`SELECT * FROM batches WHERE id = ${requestedBatchId}`;
     if (batchesResult.rows.length === 0) {
       return NextResponse.json({
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     
     const requestedBatch = batchesResult.rows[0];
     
-    // STAP 3: Check of batch sold out is, maar als het 0 minted wallets heeft, dan niet
+    // Check if batch is sold out
     if (requestedBatch.is_sold_out && requestedBatch.minted_wallets > 0) {
       return NextResponse.json({
         eligible: false,
@@ -47,46 +47,37 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // STAP 4: Als de wallet in whitelist staat, check of hij voor de juiste batch is
-    if (whitelistedBatchId !== null) {
-      // Check of de wallet al gemint heeft
-      const mintedWalletsResult = await sql`
-        SELECT * FROM minted_wallets 
-        WHERE address = ${address} AND batch_id = ${requestedBatchId}
-      `;
-      
-      if (mintedWalletsResult.rows.length > 0) {
-        return NextResponse.json({
-          eligible: false,
-          reason: 'already_minted',
-          whitelistedBatch: whitelistedBatchId,
-          message: `Address has already minted from batch #${requestedBatchId}`
-        });
-      }
-      
-      // Sta toe als de wallet gewhitelist is voor de gevraagde batch
-      if (whitelistedBatchId === requestedBatchId) {
-        return NextResponse.json({
-          eligible: true,
-          batchId: requestedBatchId,
-          message: `Address is eligible to mint from batch #${requestedBatchId}`
-        });
-      }
-      
-      // Als wallet voor een andere batch is, geef dat aan
+    // Check if the address has already minted from this batch
+    const mintedWalletsResult = await sql`
+      SELECT * FROM minted_wallets 
+      WHERE address = ${address} AND batch_id = ${requestedBatchId}
+    `;
+    
+    if (mintedWalletsResult.rows.length > 0) {
       return NextResponse.json({
         eligible: false,
-        reason: 'not_whitelisted_for_batch',
-        whitelistedBatch: whitelistedBatchId,
-        message: `Address is whitelisted for batch #${whitelistedBatchId}, not for batch #${requestedBatchId}`
+        reason: 'already_minted',
+        message: `Address has already minted from batch #${requestedBatchId}`
       });
     }
     
-    // Default response - niet in whitelist
+    // Check if address is whitelisted for the requested batch
+    if (whitelistedBatchId === requestedBatchId) {
+      return NextResponse.json({
+        eligible: true,
+        batchId: requestedBatchId,
+        message: `Address is eligible to mint from batch #${requestedBatchId}`
+      });
+    }
+    
+    // Default response - not in whitelist or whitelisted for a different batch
     return NextResponse.json({
       eligible: false,
       reason: 'not_whitelisted',
-      message: 'Address is not whitelisted for any batch'
+      whitelistedBatch: whitelistedBatchId,
+      message: whitelistedBatchId ? 
+        `Address is whitelisted for batch #${whitelistedBatchId}, not for batch #${requestedBatchId}` :
+        'Address is not whitelisted for any batch'
     });
   } catch (error) {
     console.error('Verify endpoint error:', error);
