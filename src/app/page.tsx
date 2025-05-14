@@ -268,18 +268,28 @@ export default function HomePage() {
       const data = await response.json();
       console.log('Wallet check response:', data);
 
+      // Als wallet eligible is voor de huidige batch
       if (data.eligible) {
         setCheckResult(`🎉 This address is whitelisted for Batch #${data.batchId}`);
-      } else if (data.whitelistedBatch) {
-        setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
-      } else if (data.reason === 'batch_sold_out') {
-        // Zorg dat we altijd een currentBatch hebben door de huidige batch uit de UI te gebruiken
-        // of de currentBatch uit de API response, of default naar 1 als niets beschikbaar is
-        const activeBatchId = data.currentBatch || currentBatch || 1;
-        setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${activeBatchId}`);
-      } else if (data.reason === 'not_whitelisted_for_batch' && data.whitelistedBatch) {
-        setCheckResult(`⚠️ This address is whitelisted for Batch #${data.whitelistedBatch}, not for Batch #${currentBatch}`);
-      } else {
+      } 
+      // Als wallet gewhitelist is voor een andere batch
+      else if (data.whitelistedBatch) {
+        // Als de batch waar deze wallet voor is gewhitelist sold out is
+        if (data.reason === 'batch_sold_out') {
+          const activeBatchId = data.currentBatch || currentBatch || 1;
+          setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${activeBatchId}\nYour wallet is whitelisted for Batch #${data.whitelistedBatch}`);
+        }
+        // Wallet is gewhitelist voor een andere, niet sold-out batch
+        else if (data.reason === 'not_whitelisted_for_batch') {
+          setCheckResult(`⚠️ This address is whitelisted for Batch #${data.whitelistedBatch}, not for Batch #${currentBatch}`);
+        }
+        // Andere status, maar wel gewhitelist
+        else {
+          setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
+        }
+      } 
+      // Wallet is niet gewhitelist voor enige batch
+      else {
         setCheckResult(`🐯 This address is not whitelisted\nYou are not bullish enough`);
       }
     } catch (error) {

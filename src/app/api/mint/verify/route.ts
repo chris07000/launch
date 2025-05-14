@@ -31,6 +31,14 @@ export async function GET(request: NextRequest) {
 
     // Log de current batch voor debug
     console.log(`Current active batch: ${currentBatchId}`);
+    
+    // Check if address is whitelisted for any batch - doe dit eerst om het in alle responses te kunnen gebruiken
+    const anyWhitelistEntry = whitelist.find(entry => entry.address === address);
+    const whitelistedBatchId = anyWhitelistEntry ? anyWhitelistEntry.batchId : null;
+    
+    // Log debugging info
+    console.log(`Wallet check for address: ${address}, requested batch: ${requestedBatchId}`);
+    console.log(`Wallet is whitelisted for batch: ${whitelistedBatchId || 'NONE'}`);
 
     // Check if the specified batch exists
     const requestedBatch = batches.find(b => b.id === requestedBatchId);
@@ -38,7 +46,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         eligible: false,
         reason: 'invalid_batch',
-        message: `Batch #${requestedBatchId} not found`
+        message: `Batch #${requestedBatchId} not found`,
+        whitelistedBatch: whitelistedBatchId
       });
     }
 
@@ -48,12 +57,12 @@ export async function GET(request: NextRequest) {
         eligible: false,
         reason: 'batch_sold_out',
         currentBatch: currentBatchId,
+        whitelistedBatch: whitelistedBatchId,
         message: `Batch #${requestedBatchId} is sold out. The current active batch is #${currentBatchId}.`
       });
     }
 
-    // Check if address is whitelisted for any batch
-    const anyWhitelistEntry = whitelist.find(entry => entry.address === address);
+    // Als wallet niet gewhitelist is voor enige batch
     if (!anyWhitelistEntry) {
       return NextResponse.json({
         eligible: false,
@@ -63,14 +72,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if the batch that the user is whitelisted for is sold out
-    const whitelistedBatchId = anyWhitelistEntry.batchId;
     const whitelistedBatch = batches.find(b => b.id === whitelistedBatchId);
     
     // Check if the user's originally whitelisted batch is sold out
     const isOriginalBatchSoldOut = whitelistedBatch?.isSoldOut === true;
 
     // Check if address is whitelisted for the requested batch
-    const isWhitelistedForRequestedBatch = anyWhitelistEntry.batchId === requestedBatchId;
+    const isWhitelistedForRequestedBatch = whitelistedBatchId === requestedBatchId;
 
     // Als gebruiker is gewhitelist voor een batch die sold out is, maar probeert een nog beschikbare batch te gebruiken
     if (isOriginalBatchSoldOut && requestedBatchId !== whitelistedBatchId) {
@@ -97,6 +105,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         eligible: false,
         reason: 'already_minted',
+        whitelistedBatch: whitelistedBatchId,
         message: `Address has already minted from batch #${requestedBatchId}`
       });
     }
@@ -115,6 +124,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           eligible: false,
           reason: 'batch_full',
+          whitelistedBatch: whitelistedBatchId,
           message: `Batch #${requestedBatchId} has reached maximum tigers (${requestedBatch.ordinals})`
         });
       }
@@ -131,6 +141,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           eligible: false,
           reason: 'batch_full',
+          whitelistedBatch: whitelistedBatchId,
           message: `Batch #${requestedBatchId} has reached maximum wallets`
         });
       }
@@ -140,7 +151,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       eligible: true,
       batchId: requestedBatchId,
-      originalWhitelistedBatch: whitelistedBatchId,
+      whitelistedBatch: whitelistedBatchId,
       message: `Address is eligible to mint from batch #${requestedBatchId}`
     });
   } catch (error) {

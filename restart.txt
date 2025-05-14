@@ -1,6 +1,7 @@
-Last restart: 2024-07-12 13:40:00
-Current restart: 2024-07-12 14:00:00
+Last restart: 2024-07-12 14:00:00
+Current restart: 2024-07-12 14:30:00
 
 New improvements:
 - Added batch force reset API to reset batch 1
-- Fixed wallet status error message to correctly show current active batch 
+- Fixed wallet status error message to correctly show current active batch
+- Improved whitelist verification to show whitelist batch in all responses 
