@@ -257,7 +257,50 @@ export default function HomePage() {
     setCheckResult('');
 
     try {
-      // Voeg timestamp toe om caching te voorkomen
+      // EMERGENCY FIX: eerst force advance check uitvoeren om de database correct te updaten
+      console.log('⚠️ Forcing emergency check-cooldown-and-advance before wallet check');
+      
+      try {
+        const resetResponse = await fetch('/api/batch-force-reset?token=RareTigers2024!', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        
+        if (resetResponse.ok) {
+          console.log('Emergency batch reset completed successfully');
+        }
+      } catch (resetError) {
+        console.error('Emergency batch reset failed:', resetError);
+      }
+      
+      // Refresh de batch info om meteen de laatste status te hebben
+      try {
+        const batchResponse = await fetch('/api/mint/current-batch', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        const batchData = await batchResponse.json();
+        
+        // Update direct onze lokale status
+        if (batchData.currentBatch) {
+          setCurrentBatch(batchData.currentBatch);
+        }
+        
+        // Dit is kritiek - overschrijf de isSoldOut status met wat de server zegt
+        if (batchData.soldOut !== undefined) {
+          setIsSoldOut(batchData.soldOut);
+        }
+        
+        console.log('Emergency batch info refresh completed:', batchData);
+      } catch (batchError) {
+        console.error('Emergency batch info refresh failed:', batchError);
+      }
+      
+      // Nu pas de wallet check uitvoeren met de meest recente data
       const timestamp = Date.now();
       const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}&t=${timestamp}`, {
         cache: 'no-store',
