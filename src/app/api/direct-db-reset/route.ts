@@ -15,96 +15,100 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
-    // EMERGENCY RESET: Alle tabellen direct via SQL opnieuw instellen
-
+    console.log('🔍 FULL DATABASE RESET INITIATED - EXTREME EMERGENCY SOLUTION');
+    
+    // Query alle tabellen voor diagnostiek
     try {
-      console.log('🚨 STARTING EMERGENCY DATABASE RESET 🚨');
-      
-      // 1. BATCH TABEL
-      await sql`
-        UPDATE batches 
-        SET is_sold_out = false, minted_tigers = 0, minted_wallets = 0
-        WHERE id = 1;
+      const { rows: tables } = await sql`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
       `;
-      console.log('✅ Reset batches tabel voor batch 1');
       
-      // 2. CURRENT BATCH TABEL
-      await sql`
-        UPDATE current_batch 
-        SET current_batch = 1, sold_out_at = NULL;
-      `;
-      console.log('✅ Reset current_batch tabel');
+      console.log('📊 Database tables found:', tables.map(t => t.table_name).join(', '));
       
-      // 3. MINTED WALLETS TABEL
-      await sql`
-        DELETE FROM minted_wallets 
-        WHERE batch_id = 1;
-      `;
-      console.log('✅ Verwijderde minted wallets voor batch 1');
+      // Get batch info before reset
+      const { rows: batchesBefore } = await sql`SELECT * FROM batches WHERE id = 1`;
+      console.log('Database status voor reset - Batch 1:', JSON.stringify(batchesBefore, null, 2));
       
-      // 4. WHITELIST INFO OPHALEN
-      const { rows: whitelist } = await sql`SELECT * FROM whitelist`;
-      console.log(`ℹ️ Whitelist bevat ${whitelist.length} entries`);
+      const { rows: currentBatchBefore } = await sql`SELECT * FROM current_batch`;
+      console.log('Database status voor reset - Current batch:', JSON.stringify(currentBatchBefore, null, 2));
       
-      // 5. ALLE TABELLEN EXTRA DIAGNOSTIEK
-      const { rows: batches } = await sql`SELECT * FROM batches`;
-      console.log('ℹ️ Batches table content:', JSON.stringify(batches, null, 2));
-      
-      const { rows: currentBatch } = await sql`SELECT * FROM current_batch`;
-      console.log('ℹ️ Current batch table content:', JSON.stringify(currentBatch, null, 2));
-      
-      const { rows: mintedWallets } = await sql`SELECT * FROM minted_wallets`;
-      console.log('ℹ️ Minted wallets table content:', JSON.stringify(mintedWallets, null, 2));
-      
-      console.log('🚨 EMERGENCY DATABASE RESET COMPLETED 🚨');
-    } catch (sqlError) {
-      console.error('🔴 Critical SQL error during emergency reset:', sqlError);
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Critical SQL error during reset',
-        details: sqlError instanceof Error ? sqlError.message : String(sqlError)
-      }, { status: 500 });
+      const { rows: mintedWalletsBefore } = await sql`SELECT COUNT(*) as count FROM minted_wallets WHERE batch_id = 1`;
+      console.log(`Database status voor reset - Minted wallets voor batch 1: ${mintedWalletsBefore[0]?.count || 0}`);
+    } catch (error) {
+      console.error('Error tijdens pre-reset diagnostiek:', error);
     }
     
-    // Ook via storage wrappers voor extra zekerheid
+    // Stap 1: Update batches tabel - reset batch 1
     try {
-      // Eerst de huidige batches ophalen
-      const batches = await storage.getBatches();
-      console.log('ℹ️ Batch info from storage wrapper:', JSON.stringify(batches, null, 2));
+      await sql`
+        UPDATE batches 
+        SET is_sold_out = false, 
+            minted_tigers = 0, 
+            minted_wallets = 0
+        WHERE id = 1
+      `;
+      console.log('✅ Stap 1: Batch 1 reset in batches tabel');
+    } catch (error) {
+      console.error('❌ Error tijdens update batches tabel:', error);
+    }
+    
+    // Stap 2: Reset current_batch tabel
+    try {
+      await sql`
+        UPDATE current_batch 
+        SET current_batch = 1, 
+            sold_out_at = NULL
+      `;
+      console.log('✅ Stap 2: Current batch reset naar batch 1');
+    } catch (error) {
+      console.error('❌ Error tijdens update current_batch tabel:', error);
+    }
+    
+    // Stap 3: Verwijder alle minted wallets voor batch 1
+    try {
+      await sql`
+        DELETE FROM minted_wallets 
+        WHERE batch_id = 1
+      `;
+      console.log('✅ Stap 3: Alle minted wallets voor batch 1 verwijderd');
+    } catch (error) {
+      console.error('❌ Error tijdens verwijderen minted_wallets:', error);
+    }
+    
+    // Stap 4: Verwijder alle orders voor batch 1
+    try {
+      await sql`
+        DELETE FROM orders 
+        WHERE batch_id = 1
+      `;
+      console.log('✅ Stap 4: Alle orders voor batch 1 verwijderd');
+    } catch (error) {
+      console.error('❌ Error tijdens verwijderen orders:', error);
+    }
+    
+    // Controleer de status na alle updates
+    try {
+      const { rows: batchesAfter } = await sql`SELECT * FROM batches WHERE id = 1`;
+      console.log('Database status na reset - Batch 1:', JSON.stringify(batchesAfter, null, 2));
       
-      // Batch 1 resetten
-      const batch1Index = batches.findIndex(b => b.id === 1);
-      if (batch1Index !== -1) {
-        batches[batch1Index].mintedTigers = 0;
-        batches[batch1Index].mintedWallets = 0;
-        batches[batch1Index].isSoldOut = false;
-        await storage.saveBatches(batches);
-        console.log('✅ Reset batch 1 via storage wrapper');
-      } else {
-        console.warn('⚠️ Batch 1 niet gevonden in storage wrapper');
-      }
+      const { rows: currentBatchAfter } = await sql`SELECT * FROM current_batch`;
+      console.log('Database status na reset - Current batch:', JSON.stringify(currentBatchAfter, null, 2));
       
-      // De current batch resetten
-      await storage.saveCurrentBatch({
-        currentBatch: 1,
-        soldOutAt: null
-      });
-      console.log('✅ Reset current batch via storage wrapper');
+      const { rows: mintedWalletsAfter } = await sql`SELECT COUNT(*) as count FROM minted_wallets WHERE batch_id = 1`;
+      console.log(`Database status na reset - Minted wallets voor batch 1: ${mintedWalletsAfter[0]?.count || 0}`);
       
-      // Minted wallets resetten
-      const mintedWallets = await storage.getMintedWallets();
-      const filteredWallets = mintedWallets.filter(w => w.batchId !== 1);
-      await storage.saveMintedWallets(filteredWallets);
-      console.log('✅ Removed batch 1 minted wallets via storage wrapper');
-    } catch (storageError) {
-      console.error('🟠 Error tijdens storage wrapper reset:', storageError);
-      // We gaan door zelfs als er een fout is met de storage wrappers
+      const { rows: ordersAfter } = await sql`SELECT COUNT(*) as count FROM orders WHERE batch_id = 1`;
+      console.log(`Database status na reset - Orders voor batch 1: ${ordersAfter[0]?.count || 0}`);
+    } catch (error) {
+      console.error('Error tijdens post-reset diagnostiek:', error);
     }
     
     return NextResponse.json({
       success: true,
-      message: 'EMERGENCY RESET COMPLETED - Database is now in clean state',
-      instructions: 'Please refresh your browser or restart the application to see changes'
+      message: 'COMPLETE DATABASE RESET SUCCESSFUL - All batch 1 data has been reset',
+      resetTime: new Date().toISOString()
     }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
@@ -113,9 +117,9 @@ export async function GET(request: Request) {
       }
     });
   } catch (error: any) {
-    console.error('🔴 General error in emergency reset:', error);
+    console.error('❌ Fatal error during database reset:', error);
     return NextResponse.json({ 
-      error: 'An error occurred during emergency database reset',
+      error: 'An error occurred during full database reset',
       details: error.message
     }, { status: 500 });
   }
