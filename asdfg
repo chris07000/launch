@@ -1,0 +1,8 @@
+[33mcommit c6b5af9fb1c67ecbe87524decf409472da542544[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: chris07000 <c.k.onderhoudsbedrijf@gmail.com>
+Date:   Wed May 14 21:28:14 2025 +0200
+
+    Remove auto-whitelist feature and simplify verify endpoint
+
+ src/app/api/mint/verify/route.ts | 23 [32m+++[m[31m--------------------[m
+ 1 file changed, 3 insertions(+), 20 deletions(-)
