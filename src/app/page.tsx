@@ -353,7 +353,7 @@ export default function HomePage() {
 
       // Als wallet eligible is voor de huidige batch
       if (data.eligible) {
-        setCheckResult(`🎉 This address is whitelisted for Batch #${data.batchId}`);
+        setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch || data.batchId || currentBatch}`);
       } 
       // Als wallet gewhitelist is voor een andere batch
       else if (data.whitelistedBatch) {
