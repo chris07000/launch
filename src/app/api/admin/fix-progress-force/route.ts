@@ -24,12 +24,13 @@ export async function GET(request: NextRequest) {
     
     // STAP 2: Alle counts aan de database kant berekenen
     console.log("FASE 2: Calculaties aan de database kant");
-    let totalMintsPerBatch = {};
+    // Gebruik Record<number, number> om TypeScript-fouten te voorkomen
+    const totalMintsPerBatch: Record<number, number> = {};
     mintedWalletsRaw.forEach(wallet => {
       const batchId = wallet.batch_id;
       const quantity = wallet.quantity || 1; // Default naar 1 als quantity niet bestaat
       
-      if (!totalMintsPerBatch[batchId]) {
+      if (totalMintsPerBatch[batchId] === undefined) {
         totalMintsPerBatch[batchId] = 0;
       }
       

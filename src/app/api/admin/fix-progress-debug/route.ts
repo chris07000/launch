@@ -24,19 +24,21 @@ export async function GET(request: NextRequest) {
     const batches = await storage.getBatches();
     const mintedWallets = await storage.getMintedWallets();
     
-    // Tel mints per batch
-    const mintCounts = {};
+    // Tel mints per batch - gebruik Record<string, number> voor correcte TypeScript typering
+    const mintCounts: Record<string, number> = {};
     mintedWallets.forEach(wallet => {
-      if (!mintCounts[wallet.batchId]) {
-        mintCounts[wallet.batchId] = 0;
+      // Convert batchId to string to use as an object key
+      const batchKey = wallet.batchId.toString();
+      if (!mintCounts[batchKey]) {
+        mintCounts[batchKey] = 0;
       }
-      mintCounts[wallet.batchId] += wallet.quantity;
+      mintCounts[batchKey] += wallet.quantity;
     });
     
     // Voeg het totaal aantal mints toe
     let totalMints = 0;
     Object.values(mintCounts).forEach(count => {
-      totalMints += count as number;
+      totalMints += count;
     });
     
     return NextResponse.json({
