@@ -1,5 +1,5 @@
-Last restart: 2024-07-12 19:00:00
-Current restart: 2024-07-12 19:30:00
+Last restart: 2024-07-12 19:30:00
+Current restart: 2024-05-14 20:31:00
 
 New improvements:
 - Added batch force reset API to reset batch 1
@@ -14,4 +14,5 @@ New improvements:
 - NUCLEAIRE OPTIE: Complete database reset API die alle tabellen direct benadert
 - LAATSTE OPLOSSING: Wallet check roept nu automatisch database reset aan voor maximale zekerheid
 - DEFINITIEVE FIX: Error verbeteringen voor duidelijkere gebruikersinterface
-- LAATSTE BUGFIX: Frontend override van foute "sold out" melding wanneer er 0 tigers zijn gemint 
+- LAATSTE BUGFIX: Frontend override van foute "sold out" melding wanneer er 0 tigers zijn gemint
+- DATUM CORRECTIE: Juiste datum toegepast (14-05-2024 ipv 12-07-2024) 
