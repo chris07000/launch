@@ -273,7 +273,10 @@ export default function HomePage() {
       } else if (data.whitelistedBatch) {
         setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
       } else if (data.reason === 'batch_sold_out') {
-        setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${data.currentBatch}`);
+        // Zorg dat we altijd een currentBatch hebben door de huidige batch uit de UI te gebruiken
+        // of de currentBatch uit de API response, of default naar 1 als niets beschikbaar is
+        const activeBatchId = data.currentBatch || currentBatch || 1;
+        setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${activeBatchId}`);
       } else if (data.reason === 'not_whitelisted_for_batch' && data.whitelistedBatch) {
         setCheckResult(`⚠️ This address is whitelisted for Batch #${data.whitelistedBatch}, not for Batch #${currentBatch}`);
       } else {
