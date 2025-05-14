@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bitcointigers2024';
+// Verwijder de hardcoded fallback en controleer juist of de env var bestaat
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+  console.error('KRITIEKE FOUT: ADMIN_PASSWORD environment variabele is niet ingesteld!');
+}
 
 // Initialize the table
 async function initializeTable() {

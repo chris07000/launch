@@ -42,7 +42,10 @@ const PROJECT_BTC_ADDRESS = process.env.PROJECT_BTC_WALLET || 'bc1p9rf34vgvaz2rs
 const PAYMENT_BTC_ADDRESS = process.env.PAYMENT_BTC_WALLET || 'bc1qwfdxl0pq8d4tefd80enw3yae2k2dsszemrv6j0';
 
 // Admin wachtwoord voor toegang tot beheersfuncties
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bitcointigers2024';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) {
+  console.error('KRITIEKE FOUT: ADMIN_PASSWORD environment variabele is niet ingesteld!');
+}
 
 // Maximaal aantal Tigers per wallet
 export const MAX_TIGERS_PER_WALLET = process.env.MAX_TIGERS_PER_WALLET ? parseInt(process.env.MAX_TIGERS_PER_WALLET, 10) : 2;

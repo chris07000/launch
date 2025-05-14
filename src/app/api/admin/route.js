@@ -10,7 +10,17 @@ export async function GET(request) {
     const adminPassword = url.searchParams.get('password');
     
     // Check admin password
-    const expectedPassword = process.env.ADMIN_PASSWORD || 'bitcointigers2024';
+    const expectedPassword = process.env.ADMIN_PASSWORD;
+    if (!expectedPassword) {
+      console.error('KRITIEKE FOUT: ADMIN_PASSWORD environment variabele is niet ingesteld!');
+      return new Response(JSON.stringify({
+        error: 'Server configuratiefout: admin password is niet geconfigureerd'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     if (adminPassword !== expectedPassword) {
       return new Response(JSON.stringify({
         error: 'Invalid admin password'
@@ -90,7 +100,17 @@ export async function POST(request) {
     const { action, password, address, batchId } = data;
     
     // Check admin password
-    const expectedPassword = process.env.ADMIN_PASSWORD || 'bitcointigers2024';
+    const expectedPassword = process.env.ADMIN_PASSWORD;
+    if (!expectedPassword) {
+      console.error('KRITIEKE FOUT: ADMIN_PASSWORD environment variabele is niet ingesteld!');
+      return new Response(JSON.stringify({
+        error: 'Server configuratiefout: admin password is niet geconfigureerd'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     if (password !== expectedPassword) {
       return new Response(JSON.stringify({
         error: 'Invalid admin password'
