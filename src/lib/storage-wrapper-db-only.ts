@@ -253,13 +253,21 @@ export async function getCurrentBatch(): Promise<{ currentBatch: number, soldOut
     const { rows } = await withRetry(async () => 
       await sql`SELECT * FROM current_batch LIMIT 1`
     );
+    
+    // Debug logging toevoegen
+    console.log('getCurrentBatch data from database:', JSON.stringify(rows, null, 2));
+    
     if (rows.length > 0) {
-      return {
+      const result = {
         currentBatch: rows[0].current_batch,
         soldOutAt: rows[0].sold_out_at ? new Date(rows[0].sold_out_at).getTime() : null
       };
+      console.log('Returning current batch info:', JSON.stringify(result, null, 2));
+      return result;
     }
+    
     // Default values if no record exists
+    console.log('No current batch data found, returning defaults');
     return { currentBatch: 1, soldOutAt: null };
   } catch (error) {
     console.error('Error getting current batch from database:', error);
