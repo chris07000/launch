@@ -70,7 +70,7 @@ export async function GET(request: Request) {
           whitelistedAddresses,
           batches: batchesWithAvailability,
           currentBatch: currentBatchInfo.currentBatch,
-          orders,
+      orders,
           mintedWallets
         }), {
           status: 200,

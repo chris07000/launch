@@ -225,8 +225,8 @@ export async function getWhitelist(): Promise<WhitelistEntry[]> {
 // Save whitelist
 export async function saveWhitelist(entries: WhitelistEntry[]): Promise<boolean> {
   try {
-    // In plaats van TRUNCATE, gebruik DELETE en daarna individuele INSERT operaties
-    await withRetry(async () => await sql`DELETE FROM whitelist`);
+    // BELANGRIJK: Verwijder de "DELETE FROM whitelist" en gebruik alleen UPSERT
+    // NIET doen: await withRetry(async () => await sql`DELETE FROM whitelist`);
     
     for (const entry of entries) {
       await withRetry(async () =>
