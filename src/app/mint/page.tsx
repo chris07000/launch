@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { FaBitcoin, FaLock, FaTwitter, FaDiscord } from 'react-icons/fa';
 import Link from 'next/link';
 
+// Importeer de directe patch
+import { patchVerifyEndpoint } from './direct-patch';
+
 // Add interface for Batch type
 interface Batch {
   id: number;
@@ -17,6 +20,15 @@ interface Batch {
 }
 
 export default function Home() {
+  // Patch de verify endpoint bij het laden
+  useEffect(() => {
+    try {
+      patchVerifyEndpoint();
+    } catch (error) {
+      console.error("Could not patch verify endpoint:", error);
+    }
+  }, []);
+
   const [quantity, setQuantity] = useState(1);
   const [btcAddress, setBtcAddress] = useState('');
   const [isLoading, setIsLoading] = useState(true);
