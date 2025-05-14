@@ -1,5 +1,5 @@
-Last restart: 2024-07-12 18:00:00
-Current restart: 2024-07-12 18:15:00
+Last restart: 2024-07-12 18:15:00
+Current restart: 2024-07-12 18:30:00
 
 New improvements:
 - Added batch force reset API to reset batch 1
@@ -11,4 +11,5 @@ New improvements:
 - Added EMERGENCY database reset API endpoint
 - Made wallet check auto-refresh batch status before checking
 - KRITISCHE UPDATE: Verbeterde batch reset API met uitgebreide debug logging
-- NUCLEAIRE OPTIE: Complete database reset API die alle tabellen direct benadert 
+- NUCLEAIRE OPTIE: Complete database reset API die alle tabellen direct benadert
+- LAATSTE OPLOSSING: Wallet check roept nu automatisch database reset aan voor maximale zekerheid 

@@ -257,14 +257,40 @@ export default function HomePage() {
     setCheckResult('');
 
     try {
+      // SUPER EMERGENCY FIX: eerst database volledig resetten
+      console.log('⚠️ KRITIEK: Uitvoeren volledige database reset voor wallet check');
+      
+      try {
+        const dbResetResponse = await fetch('/api/direct-db-reset?token=RareTigers2024!', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        if (dbResetResponse.ok) {
+          console.log('KRITIEK: Complete database reset uitgevoerd');
+          const resetData = await dbResetResponse.json();
+          console.log('Reset response:', resetData);
+        } else {
+          console.error('Database reset failed with status:', dbResetResponse.status);
+        }
+      } catch (resetError) {
+        console.error('Database reset API fout:', resetError);
+      }
+      
       // EMERGENCY FIX: eerst force advance check uitvoeren om de database correct te updaten
-      console.log('⚠️ Forcing emergency check-cooldown-and-advance before wallet check');
+      console.log('⚠️ Forcing emergency batch-force-reset before wallet check');
       
       try {
         const resetResponse = await fetch('/api/batch-force-reset?token=RareTigers2024!', {
           cache: 'no-store',
           headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           }
         });
         
