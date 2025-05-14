@@ -50,13 +50,27 @@ export async function synchronizeBatchCounter(batchId: number): Promise<void> {
     const batchIndex = batches.findIndex(b => b.id === batchId);
     
     if (batchIndex !== -1) {
+      const currentBatch = batches[batchIndex];
       // Update mintedWallets met de exacte tellingen, ongeacht wat het was
-      if (batches[batchIndex].mintedWallets !== totalMintsForBatch) {
-        console.log(`[SYNC] Updating batch ${batchId} mintedWallets counter: ${batches[batchIndex].mintedWallets} → ${totalMintsForBatch}`);
-        batches[batchIndex].mintedWallets = totalMintsForBatch;
+      if (currentBatch.mintedWallets !== totalMintsForBatch) {
+        console.log(`[SYNC] Updating batch ${batchId} mintedWallets counter: ${currentBatch.mintedWallets} → ${totalMintsForBatch}`);
+        currentBatch.mintedWallets = totalMintsForBatch;
+        
+        // BELANGRIJK: ook mintedTigers bijwerken - dit zorgt dat de progressbar wordt bijgewerkt
+        // Elke wallet kan 1 of 2 tigers minten, dus we gebruiken de exacte quantity uit mintedWallets
+        currentBatch.mintedTigers = totalMintsForBatch;
+        console.log(`[SYNC] Also updated mintedTigers count to ${totalMintsForBatch}`);
+        
         await storage.saveBatches(batches);
       } else {
         console.log(`[SYNC] Batch ${batchId} counter is already correct: ${totalMintsForBatch}`);
+        
+        // Controleer ook nog of mintedTigers gelijk is aan mintedWallets
+        if (currentBatch.mintedTigers !== totalMintsForBatch) {
+          console.log(`[SYNC] Fixing mintedTigers: ${currentBatch.mintedTigers} → ${totalMintsForBatch}`);
+          currentBatch.mintedTigers = totalMintsForBatch;
+          await storage.saveBatches(batches);
+        }
       }
     }
   } catch (error) {
