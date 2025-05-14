@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     const currentBatchId = currentBatchInfo.currentBatch;
+    const soldOutAt = currentBatchInfo.soldOutAt;
 
     // Log de current batch voor debug
     console.log(`Current active batch: ${currentBatchId}`);
@@ -53,13 +54,38 @@ export async function GET(request: NextRequest) {
 
     // Check if the requested batch is sold out - en stel voor om naar current batch te gaan
     if (requestedBatch.isSoldOut) {
-      return NextResponse.json({
-        eligible: false,
-        reason: 'batch_sold_out',
-        currentBatch: currentBatchId,
-        whitelistedBatch: whitelistedBatchId,
-        message: `Batch #${requestedBatchId} is sold out. The current active batch is #${currentBatchId}.`
-      });
+      // Extra veiligheid: Als er 0 tigers gemint zijn, negeer de isSoldOut status
+      if (requestedBatch.mintedTigers === 0 || requestedBatch.mintedWallets === 0) {
+        console.log(`Batch ${requestedBatchId} is marked as sold out, but has 0 tigers minted. Treating as not sold out.`);
+        // Update de sold out status in database via direct SQL voor deze situatie
+        try {
+          // Reset de batch
+          await storage.saveBatches([{
+            ...requestedBatch,
+            isSoldOut: false
+          }]);
+          
+          // Als dit de huidige batch is en er is een soldOutAt, reset die ook
+          if (requestedBatchId === currentBatchId && soldOutAt) {
+            await storage.saveCurrentBatch({
+              currentBatch: currentBatchId,
+              soldOutAt: null
+            });
+          }
+          
+          console.log(`Reset sold out status for batch ${requestedBatchId} because it had 0 tigers minted.`);
+        } catch (error) {
+          console.error(`Error resetting sold out status for batch ${requestedBatchId}:`, error);
+        }
+      } else {
+        return NextResponse.json({
+          eligible: false,
+          reason: 'batch_sold_out',
+          currentBatch: currentBatchId,
+          whitelistedBatch: whitelistedBatchId,
+          message: `Batch #${requestedBatchId} is sold out. The current active batch is #${currentBatchId}.`
+        });
+      }
     }
 
     // Als wallet niet gewhitelist is voor enige batch

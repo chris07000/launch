@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
       totalTigers: totalTigers,
       mintedTigers: mintedTigers,
       availableTigers: availableTigers,
-      soldOut: !!soldOutAt,
+      soldOut: currentBatchObj.isSoldOut && !!soldOutAt,
       soldOutAt: soldOutAt,
       timeLeft: timeLeft,
       cooldownDuration: 900000 // Default to 15 minutes
