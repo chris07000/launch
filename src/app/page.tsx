@@ -257,18 +257,31 @@ export default function HomePage() {
     setCheckResult('');
 
     try {
-      const data = await fetchApi(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}`);
+      // Voeg timestamp toe om caching te voorkomen
+      const timestamp = Date.now();
+      const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}&t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+      const data = await response.json();
+      console.log('Wallet check response:', data);
 
       if (data.eligible) {
-        setCheckResult(`🎉 This address is whitelisted for Batch #${currentBatch}`);
+        setCheckResult(`🎉 This address is whitelisted for Batch #${data.batchId}`);
       } else if (data.whitelistedBatch) {
         setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
+      } else if (data.reason === 'batch_sold_out') {
+        setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${data.currentBatch}`);
+      } else if (data.reason === 'not_whitelisted_for_batch' && data.whitelistedBatch) {
+        setCheckResult(`⚠️ This address is whitelisted for Batch #${data.whitelistedBatch}, not for Batch #${currentBatch}`);
       } else {
         setCheckResult(`🐯 This address is not whitelisted\nYou are not bullish enough`);
       }
     } catch (error) {
-      const { error: errorMessage } = handleApiError(error);
-      setError(errorMessage);
+      console.error('Error checking wallet:', error);
+      setError('An error occurred while checking your wallet. Please try again.');
     } finally {
       setIsChecking(false);
     }
