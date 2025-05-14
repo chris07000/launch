@@ -42,7 +42,62 @@ export default function HomePage() {
     return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // Effect for fetching current batch
+  // Fetch time rendering effect separately
+  useEffect(() => {
+    // Format time and update every second
+    const updateFormattedTime = () => {
+      if (isSoldOut && timeLeft > 0) {
+        setFormattedTimeLeft(formatTimeLeft(timeLeft * 1000));
+      } else {
+        setFormattedTimeLeft('0m 0s');
+      }
+    };
+    
+    // Update initially
+    updateFormattedTime();
+    
+    // Set interval to update every second
+    const formattingInterval = setInterval(updateFormattedTime, 1000);
+    
+    // Clean up
+    return () => clearInterval(formattingInterval);
+  }, [timeLeft, isSoldOut]);
+
+  // Aparte timer voor aftellen zonder pagina-refresh
+  useEffect(() => {
+    if (isSoldOut && timeLeft > 0) {
+      const timerInterval = setInterval(() => {
+        setTimeLeft(prev => Math.max(0, prev - 1));
+      }, 1000);
+      
+      return () => clearInterval(timerInterval);
+    }
+  }, [isSoldOut]);
+
+  // Effect voor controle of timer bijna op 0 staat
+  useEffect(() => {
+    if (isSoldOut && timeLeft <= 1) {
+      console.log("Timer nearly zero, forcing priority cooldown check...");
+      fetch('/api/check-cooldown-and-advance?priority=true', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }).then(response => response.json())
+        .then(data => {
+          console.log("Priority cooldown check response:", data);
+          if (data.status === 'advanced') {
+            console.log("Batch advanced, refreshing data...");
+            window.location.reload();
+          }
+        })
+        .catch(error => {
+          console.error("Error in priority check:", error);
+        });
+    }
+  }, [timeLeft, isSoldOut]);
+  
+  // Effect for fetching current batch - only refetch on interval, not on every state change
   useEffect(() => {
     const fetchBatchInfo = async () => {
       try {
@@ -50,8 +105,6 @@ export default function HomePage() {
         // Get current batch status
         const response = await fetch('/api/mint/current-batch');
         const data = await response.json();
-
-        console.log('Current batch data:', data);
         
         if (data.currentBatch) {
           setCurrentBatch(data.currentBatch);
@@ -69,15 +122,18 @@ export default function HomePage() {
 
         const mintedTigersCount = data.mintedTigers || 0;
         const totalTigersCount = data.totalTigers || 66;
-        setMintedTigers(mintedTigersCount);
-        setTotalTigers(totalTigersCount);
         
+        // Pas de weergegeven waarden alleen aan bij echte veranderingen
         if (mintedTigersCount !== cachedMintedTigers || totalTigersCount !== cachedTotalTigers) {
+          setMintedTigers(mintedTigersCount);
+          setTotalTigers(totalTigersCount);
           setCachedMintedTigers(mintedTigersCount);
           setCachedTotalTigers(totalTigersCount);
+          // Bereken percentage stabiel
           setProgressPercentage(Math.min(100, Math.round((mintedTigersCount / totalTigersCount) * 100)));
         }
         
+        // Update last refresh time
         setLastRefreshTime(Date.now());
       } catch (error) {
         console.error('Error fetching current batch:', error);
@@ -87,8 +143,6 @@ export default function HomePage() {
     };
 
     let timerInterval: NodeJS.Timeout;
-    let checkCooldownInterval: NodeJS.Timeout;
-    let countdownCheckInterval: NodeJS.Timeout;
 
     const checkMintStartTime = async () => {
       try {
@@ -125,78 +179,41 @@ export default function HomePage() {
       }
     };
 
-    // Add function to check cooldown and advance batch if needed
-    const checkCooldownAndAdvance = async (isPriority = false) => {
-      try {
-        const priorityParam = isPriority ? '?priority=true' : '';
-        console.log(`Checking cooldown and advance batch status... ${isPriority ? '(PRIORITY CHECK)' : ''}`);
-        const response = await fetch(`/api/check-cooldown-and-advance${priorityParam}`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        const data = await response.json();
-        
-        console.log("Cooldown check response:", data);
-        
-        // If the batch was advanced, refresh the batch info
-        if (data.status === 'advanced') {
-          console.log(`Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
-          // Re-fetch batch info instead of calling fetchBatchInfo
-          fetchBatchInfo();
-        } else if (data.status === 'cooldown') {
-          console.log(`Batch ${data.batch} in cooldown. ${Math.ceil(data.timeLeft / 1000 / 60)} minutes left`);
-        }
-      } catch (error) {
-        console.error('Error checking cooldown and advance:', error);
-      }
-    };
-
-    // Functie om de countdown te checken en batch te verversen wanneer timer 0 bereikt
-    const checkCountdownStatus = () => {
-      // Als er nog 1 seconde of minder over is, forceer een check
-      if (isSoldOut && timeLeft <= 1) {
-        console.log("Timer nearly zero, forcing priority cooldown check...");
-        checkCooldownAndAdvance(true);
-      }
-    };
-
     // Initial checks
     fetchBatchInfo();
     checkMintStartTime();
-    checkCooldownAndAdvance();
     
-    // Set up intervals
+    // Set up intervals - ONLY fetch batch info on intervals, not on every render
     const batchInterval = setInterval(fetchBatchInfo, 30000);
-    const countdownInterval = setInterval(() => {
-      if (isSoldOut && timeLeft > 0) {
-        setTimeLeft(prev => Math.max(0, prev - 1));
-        // Als we exact op 0 komen, forceer een check
-        if (timeLeft === 1) {
-          checkCooldownAndAdvance(true);
+    
+    const checkCooldownInterval = setInterval(() => {
+      // Check cooldown status periodically, not on render
+      fetch('/api/check-cooldown-and-advance', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         }
-      }
-    }, 1000);
-    
-    // Extra interval om elke seconde te checken of we aan het einde van de timer zijn
-    countdownCheckInterval = setInterval(checkCountdownStatus, 1000);
-    
-    checkCooldownInterval = setInterval(checkCooldownAndAdvance, 15000);
+      }).then(response => response.json())
+        .then(data => {
+          if (data.status === 'advanced') {
+            console.log(`Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
+            fetchBatchInfo();
+          }
+        })
+        .catch(error => {
+          console.error('Error checking cooldown and advance:', error);
+        });
+    }, 15000);
 
     // Cleanup function
     return () => {
       clearInterval(batchInterval);
-      clearInterval(countdownInterval);
-      clearInterval(countdownCheckInterval);
+      clearInterval(checkCooldownInterval);
       if (timerInterval) {
         clearInterval(timerInterval);
       }
-      if (checkCooldownInterval) {
-        clearInterval(checkCooldownInterval);
-      }
     };
-  }, [isSoldOut, timeLeft]);
+  }, []); // Geen dependencies zodat deze alleen bij mount draait
 
   // Format time function
   const formatTimeLeft = (milliseconds: number) => {
@@ -226,23 +243,6 @@ export default function HomePage() {
     
     return formattedTime;
   };
-
-  // Aparte effect voor time formatting zodat dit niet flikkert bij andere updates
-  useEffect(() => {
-    // Format time and update every second
-    const updateFormattedTime = () => {
-      setFormattedTimeLeft(formatTimeLeft(timeLeft * 1000));
-    };
-    
-    // Update initially
-    updateFormattedTime();
-    
-    // Set interval to update every second
-    const formattingInterval = setInterval(updateFormattedTime, 1000);
-    
-    // Clean up
-    return () => clearInterval(formattingInterval);
-  }, [timeLeft]);
 
   // Update the wallet check function
   const checkWallet = async () => {

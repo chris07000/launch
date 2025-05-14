@@ -69,7 +69,7 @@ export default function Home() {
   useEffect(() => {
     // Format time and update every second
     const updateFormattedTime = () => {
-      if (timeLeft > 0) {
+      if (isSoldOut && timeLeft > 0) {
         setFormattedTimeLeft(formatTimeLeft(timeLeft * 1000));
       } else {
         setFormattedTimeLeft('0m 0s');
@@ -84,7 +84,41 @@ export default function Home() {
     
     // Clean up
     return () => clearInterval(formattingInterval);
-  }, [timeLeft]);
+  }, [timeLeft, isSoldOut]);
+
+  // Aparte timer voor aftellen zonder pagina-refresh
+  useEffect(() => {
+    if (isSoldOut && timeLeft > 0) {
+      const timerInterval = setInterval(() => {
+        setTimeLeft(prev => Math.max(0, prev - 1));
+      }, 1000);
+      
+      return () => clearInterval(timerInterval);
+    }
+  }, [isSoldOut]);
+
+  // Effect voor controle of timer bijna op 0 staat
+  useEffect(() => {
+    if (isSoldOut && timeLeft <= 1) {
+      console.log("Mint page - Timer nearly zero, forcing priority cooldown check...");
+      fetch('/api/check-cooldown-and-advance?priority=true', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }).then(response => response.json())
+        .then(data => {
+          console.log("Priority cooldown check response:", data);
+          if (data.status === 'advanced') {
+            console.log("Batch advanced, refreshing data...");
+            window.location.reload();
+          }
+        })
+        .catch(error => {
+          console.error("Error in priority check:", error);
+        });
+    }
+  }, [timeLeft, isSoldOut]);
 
   // Fetch data from API
   useEffect(() => {
@@ -142,21 +176,7 @@ export default function Home() {
       }
     };
     
-    // Helper function to start countdown timer
-    const startCountdownTimer = (seconds: number) => {
-      let remaining = seconds;
-      const timer = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          clearInterval(timer);
-          checkBatchStatus();
-        } else {
-          setTimeLeft(remaining);
-        }
-      }, 1000);
-    };
-    
-    // Function to check batch status
+    // Function to check batch status - maar let op: dit is de eerste stap voor de refactor
     const checkBatchStatus = async () => {
       try {
         // Check current batch status
@@ -205,88 +225,44 @@ export default function Home() {
       }
     };
     
-    // Function to check cooldown and advance batch if needed
-    const checkCooldownAndAdvance = async (isPriority = false) => {
-      try {
-        const priorityParam = isPriority ? '?priority=true' : '';
-        console.log(`Mint page - Checking cooldown and advance batch status... ${isPriority ? '(PRIORITY CHECK)' : ''}`);
-        const response = await fetch(`/api/check-cooldown-and-advance${priorityParam}`, {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-        const data = await response.json();
-        
-        console.log("Mint page - Cooldown check response:", data);
-        
-        // If the batch was advanced, refresh the batch info
-        if (data.status === 'advanced') {
-          console.log(`Mint page - Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
-          
-          // Reset the verification state when the batch changes
-          if (canMint && batchNumber !== data.newBatch) {
-            setCanMint(false);
-            setBatchNumber(0);
-            setError('Batch has changed. Please verify your address again.');
-          }
-          
-          // Refresh data completely
-          fetchData();
-        } else if (data.status === 'cooldown') {
-          console.log(`Mint page - Batch ${data.batch} in cooldown. ${Math.ceil(data.timeLeft / 1000 / 60)} minutes left`);
-          // Update timer if needed
-          if (data.timeLeft && data.timeLeft > 0) {
-            setTimeLeft(Math.floor(data.timeLeft / 1000));
-          }
-        }
-      } catch (error) {
-        console.error('Error checking cooldown and advance:', error);
-      }
-    };
-    
-    // Functie om te controleren op einde timer en dan direct actie te ondernemen
-    const checkTimerEnd = () => {
-      // Als timer bijna 0 is, forceer een check
-      if (isSoldOut && timeLeft <= 1) {
-        console.log("Mint page - Timer nearly zero, forcing batch check...");
-        checkCooldownAndAdvance();
-      }
-    };
-    
     fetchData();
     
-    // Initial check for cooldown
-    checkCooldownAndAdvance();
-    
-    // Set up intervals
+    // Set up intervals - ALLEEN periodieke checks, geen afhankelijkheid van state
     const statusIntervalId = setInterval(checkBatchStatus, 30000);
-    const cooldownIntervalId = setInterval(checkCooldownAndAdvance, 15000);
     
-    // Extra interval voor het controleren van de timer die op 0 staat
-    const timerCheckInterval = setInterval(checkTimerEnd, 1000);
-    
-    // Extra timer voor het bijwerken van de countdown
-    const countdownIntervalId = setInterval(() => {
-      if (isSoldOut && timeLeft > 0) {
-        setTimeLeft(prev => {
-          const newValue = Math.max(0, prev - 1);
-          // Als we exact op 0 komen, check de batch status
-          if (newValue === 0) {
-            checkCooldownAndAdvance();
+    const cooldownIntervalId = setInterval(() => {
+      // Check cooldown status periodically
+      fetch('/api/check-cooldown-and-advance', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      }).then(response => response.json())
+        .then(data => {
+          if (data.status === 'advanced') {
+            console.log(`Mint page - Batch advanced from ${data.previousBatch} to ${data.newBatch}`);
+            
+            // Reset the verification state when the batch changes
+            if (canMint && batchNumber !== data.newBatch) {
+              setCanMint(false);
+              setBatchNumber(0);
+              setError('Batch has changed. Please verify your address again.');
+            }
+            
+            // Refresh data completely
+            fetchData();
           }
-          return newValue;
+        })
+        .catch(error => {
+          console.error('Error checking cooldown and advance:', error);
         });
-      }
-    }, 1000);
+    }, 15000);
     
     return () => {
       clearInterval(statusIntervalId);
       clearInterval(cooldownIntervalId);
-      clearInterval(timerCheckInterval);
-      clearInterval(countdownIntervalId);
     };
-  }, [canMint, batchNumber, currentBatch, isSoldOut, timeLeft]);
+  }, [canMint, batchNumber]); // Minimale dependencies, alleen wat echt moet veranderen
 
   // Format time function
   const formatTimeLeft = (milliseconds: number) => {
@@ -762,7 +738,7 @@ export default function Home() {
                       fontWeight: 'bold',
                       color: '#ffd700'
                     }}>
-                      {formattedTimeLeft || formatTimeLeft(timeLeft)}
+                      {formattedTimeLeft}
                     </span>
                   </div>
                 </div>
