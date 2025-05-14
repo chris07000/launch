@@ -17,97 +17,121 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const batchId = parseInt(batchIdParam, 10);
+    const requestedBatchId = parseInt(batchIdParam, 10);
 
-    // Get whitelist and minted wallets
-    const [whitelist, mintedWallets, batches] = await Promise.all([
+    // Get whitelist, minted wallets, current batch and all batches
+    const [whitelist, mintedWallets, batches, currentBatchInfo] = await Promise.all([
       storage.getWhitelist(),
       storage.getMintedWallets(),
-      storage.getBatches()
+      storage.getBatches(),
+      storage.getCurrentBatch()
     ]);
 
-    // Check if the specified batch exists and is not sold out
-    const batch = batches.find(b => b.id === batchId);
-    if (!batch) {
+    const currentBatchId = currentBatchInfo.currentBatch;
+
+    // Log de current batch voor debug
+    console.log(`Current active batch: ${currentBatchId}`);
+
+    // Check if the specified batch exists
+    const requestedBatch = batches.find(b => b.id === requestedBatchId);
+    if (!requestedBatch) {
       return NextResponse.json({
         eligible: false,
         reason: 'invalid_batch',
-        message: `Batch #${batchId} not found`
+        message: `Batch #${requestedBatchId} not found`
       });
     }
 
-    // Check direct if batch is sold out - do this early to avoid unnecessary checks
-    if (batch.isSoldOut) {
+    // Check if the requested batch is sold out - en stel voor om naar current batch te gaan
+    if (requestedBatch.isSoldOut) {
       return NextResponse.json({
         eligible: false,
         reason: 'batch_sold_out',
-        message: `Batch #${batchId} is sold out. Please wait for the next batch to open.`
+        currentBatch: currentBatchId,
+        message: `Batch #${requestedBatchId} is sold out. The current active batch is #${currentBatchId}.`
       });
     }
 
-    // Check if address is whitelisted for this batch
-    const whitelistEntry = whitelist.find(entry => 
-      entry.address === address && entry.batchId === batchId
-    );
-
-    // If not whitelisted for this batch, check if whitelisted for any batch
-    if (!whitelistEntry) {
-      const anyWhitelistEntry = whitelist.find(entry => entry.address === address);
-      
+    // Check if address is whitelisted for any batch
+    const anyWhitelistEntry = whitelist.find(entry => entry.address === address);
+    if (!anyWhitelistEntry) {
       return NextResponse.json({
         eligible: false,
         reason: 'not_whitelisted',
-        whitelistedBatch: anyWhitelistEntry ? anyWhitelistEntry.batchId : null,
-        message: anyWhitelistEntry 
-          ? `Address is whitelisted for batch #${anyWhitelistEntry.batchId}, not for batch #${batchId}` 
-          : 'Address is not whitelisted'
+        message: 'Address is not whitelisted for any batch'
+      });
+    }
+
+    // Check if the batch that the user is whitelisted for is sold out
+    const whitelistedBatchId = anyWhitelistEntry.batchId;
+    const whitelistedBatch = batches.find(b => b.id === whitelistedBatchId);
+    
+    // Check if the user's originally whitelisted batch is sold out
+    const isOriginalBatchSoldOut = whitelistedBatch?.isSoldOut === true;
+
+    // Check if address is whitelisted for the requested batch
+    const isWhitelistedForRequestedBatch = anyWhitelistEntry.batchId === requestedBatchId;
+
+    // Als gebruiker is gewhitelist voor een batch die sold out is, maar probeert een nog beschikbare batch te gebruiken
+    if (isOriginalBatchSoldOut && requestedBatchId !== whitelistedBatchId) {
+      // Sta dit toe - address was gewhitelisted voor een eerdere batch die nu sold out is
+      console.log(`Address ${address} was whitelisted for batch #${whitelistedBatchId} which is sold out. Allowing mint for batch #${requestedBatchId}`);
+      // Dit is OK - gebruiker mag "upgraden" naar een nieuwere beschikbare batch
+    } 
+    // Als gebruiker NIET gewhitelist is voor de gevraagde batch, en de eigen batch nog beschikbaar is
+    else if (!isWhitelistedForRequestedBatch && !isOriginalBatchSoldOut) {
+      return NextResponse.json({
+        eligible: false,
+        reason: 'not_whitelisted_for_batch',
+        whitelistedBatch: whitelistedBatchId,
+        message: `Address is whitelisted for batch #${whitelistedBatchId}, not for batch #${requestedBatchId}`
       });
     }
 
     // Check if address has already minted from this batch
     const mintedWallet = mintedWallets.find(wallet => 
-      wallet.address === address && wallet.batchId === batchId
+      wallet.address === address && wallet.batchId === requestedBatchId
     );
 
     if (mintedWallet) {
       return NextResponse.json({
         eligible: false,
         reason: 'already_minted',
-        message: `Address has already minted from batch #${batchId}`
+        message: `Address has already minted from batch #${requestedBatchId}`
       });
     }
 
-    // Check if the batch has reached its max wallets
+    // Check if the batch has reached its max wallets/tigers
     // Eerst op basis van tigers controleren, als dat beschikbaar is
-    if (batch.mintedTigers !== undefined && batch.ordinals) {
+    if (requestedBatch.mintedTigers !== undefined && requestedBatch.ordinals) {
       // Check op basis van tigers (moderner)
-      if (batch.mintedTigers >= batch.ordinals) {
+      if (requestedBatch.mintedTigers >= requestedBatch.ordinals) {
         // Update batch to sold out if it's not already marked
-        if (!batch.isSoldOut) {
-          batch.isSoldOut = true;
+        if (!requestedBatch.isSoldOut) {
+          requestedBatch.isSoldOut = true;
           await storage.saveBatches(batches);
         }
         
         return NextResponse.json({
           eligible: false,
           reason: 'batch_full',
-          message: `Batch #${batchId} has reached maximum tigers (${batch.ordinals})`
+          message: `Batch #${requestedBatchId} has reached maximum tigers (${requestedBatch.ordinals})`
         });
       }
     } else {
       // Fallback naar wallets check met null check
-      const maxWallets = batch.maxWallets || 33; // Default naar 33 als maxWallets ontbreekt
-      if (batch.mintedWallets >= maxWallets) {
+      const maxWallets = requestedBatch.maxWallets || 33; // Default naar 33 als maxWallets ontbreekt
+      if (requestedBatch.mintedWallets >= maxWallets) {
         // Update batch to sold out if it's not already marked
-        if (!batch.isSoldOut) {
-          batch.isSoldOut = true;
+        if (!requestedBatch.isSoldOut) {
+          requestedBatch.isSoldOut = true;
           await storage.saveBatches(batches);
         }
         
         return NextResponse.json({
           eligible: false,
           reason: 'batch_full',
-          message: `Batch #${batchId} has reached maximum wallets`
+          message: `Batch #${requestedBatchId} has reached maximum wallets`
         });
       }
     }
@@ -115,8 +139,9 @@ export async function GET(request: NextRequest) {
     // If all checks pass, the address is eligible to mint
     return NextResponse.json({
       eligible: true,
-      batchId,
-      message: `Address is eligible to mint from batch #${batchId}`
+      batchId: requestedBatchId,
+      originalWhitelistedBatch: whitelistedBatchId,
+      message: `Address is eligible to mint from batch #${requestedBatchId}`
     });
   } catch (error) {
     console.error('Verify endpoint error:', error);
