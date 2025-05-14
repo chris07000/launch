@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
     const whitelistEntry = whitelistResult.rows[0];
     const whitelistedBatchId = whitelistEntry ? whitelistEntry.batch_id : null;
     
+    console.log(`Checking whitelist for ${address}: ${whitelistEntry ? 'FOUND for batch ' + whitelistedBatchId : 'NOT FOUND'}`);
+    
     // STAP 2: Batch informatie ophalen
     const batchesResult = await sql`SELECT * FROM batches WHERE id = ${requestedBatchId}`;
     if (batchesResult.rows.length === 0) {
@@ -45,26 +47,7 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // STAP 4: Als wallet NIET in whitelist staat, voeg toe voor batch 1
-    if (!whitelistEntry && requestedBatchId === 1) {
-      try {
-        await sql`
-          INSERT INTO whitelist (address, batch_id, created_at)
-          VALUES (${address}, 1, ${new Date().toISOString()})
-        `;
-        
-        // Nu is het adres whitelisted voor batch 1
-        return NextResponse.json({
-          eligible: true,
-          batchId: 1,
-          message: `Address is now whitelisted and eligible to mint from batch #1`
-        });
-      } catch (error) {
-        console.error("Error adding address to whitelist:", error);
-      }
-    }
-    
-    // STAP 5: Als de wallet al in whitelist staat, check of hij voor de juiste batch is
+    // STAP 4: Als de wallet in whitelist staat, check of hij voor de juiste batch is
     if (whitelistedBatchId !== null) {
       // Check of de wallet al gemint heeft
       const mintedWalletsResult = await sql`
