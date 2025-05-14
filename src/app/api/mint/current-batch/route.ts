@@ -3,6 +3,7 @@ import * as storage from '@/lib/storage-wrapper-db-only';
 import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface CurrentBatchResponse {
   currentBatch: number;
@@ -35,37 +36,53 @@ export async function GET(request: NextRequest) {
 
   // Get current batch information
   try {
-    const { currentBatch, soldOutAt } = await storage.getCurrentBatch();
-    const batches = await storage.getBatches();
-    const currentBatchInfo = batches.find((b: any) => b.id === currentBatch);
+    const [batches, currentBatchInfo] = await Promise.all([
+      storage.getBatches(),
+      storage.getCurrentBatch()
+    ]);
     
-    // Handle case where current batch is not found
+    // Uitgebreide logging toevoegen
+    console.log('API current-batch: Batches uit database:', JSON.stringify(batches, null, 2));
+    console.log('API current-batch: Current batch info:', JSON.stringify(currentBatchInfo, null, 2));
+    
     if (!currentBatchInfo) {
-      return NextResponse.json({ 
-        error: `Current batch #${currentBatch} not found` 
-      }, { 
-        status: 404,
-        headers: corsHeaders()
-      });
+      console.error('API current-batch: Geen current batch info gevonden');
+      return NextResponse.json(
+        { error: 'Current batch info not found' },
+        { status: 500 }
+      );
     }
     
-    // Calculate time left
-    let timeLeft = 0;
-    let cooldownDuration = 900000; // Default to 15 minutes
+    const { currentBatch, soldOutAt } = currentBatchInfo;
     
-    if (soldOutAt) {
-      cooldownDuration = await getBatchCooldownMilliseconds(currentBatch);
-      const now = Date.now();
-      timeLeft = Math.max(0, cooldownDuration - (now - soldOutAt));
+    // Log huidige batch info
+    console.log(`API current-batch: Current batch: ${currentBatch}, soldOutAt: ${soldOutAt}`);
+    
+    const currentBatchObj = batches.find(b => b.id === currentBatch);
+    
+    if (!currentBatchObj) {
+      console.error(`API current-batch: Batch ${currentBatch} niet gevonden in batches`);
+      return NextResponse.json(
+        { error: `Batch ${currentBatch} not found` },
+        { status: 404 }
+      );
     }
+    
+    // Log huidige batch object
+    console.log('API current-batch: Current batch object:', JSON.stringify(currentBatchObj, null, 2));
+    
+    const timeLeft = soldOutAt ? (new Date().getTime() - soldOutAt) : 0;
+    
+    // Log de huidige batch toestand met berekend timeLeft
+    console.log(`API current-batch: isSoldOut: ${currentBatchObj.isSoldOut}, soldOutAt: ${soldOutAt}, timeLeft: ${timeLeft}`);
     
     // Calculate total and minted tigers for the current batch
-    const totalTigers = currentBatchInfo.ordinals || 66;
+    const totalTigers = currentBatchObj.ordinals || 66;
     
     // Voor backward compatibility, check eerst op mintedTigers en val terug op mintedWallets * 2
-    const mintedTigers = currentBatchInfo.mintedTigers !== undefined
-      ? currentBatchInfo.mintedTigers
-      : currentBatchInfo.mintedWallets * 2;
+    const mintedTigers = currentBatchObj.mintedTigers !== undefined
+      ? currentBatchObj.mintedTigers
+      : currentBatchObj.mintedWallets * 2;
       
     const availableTigers = totalTigers - mintedTigers;
     
@@ -77,15 +94,23 @@ export async function GET(request: NextRequest) {
       soldOut: !!soldOutAt,
       soldOutAt: soldOutAt,
       timeLeft: timeLeft,
-      cooldownDuration: cooldownDuration
+      cooldownDuration: 900000 // Default to 15 minutes
     };
     
+    // Force no-cache headers
     return NextResponse.json(response, {
-      headers: corsHeaders()
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
   } catch (error) {
-    console.error('Error fetching current batch info:', error);
-    return NextResponse.json({ error: 'Failed to fetch current batch' }, { status: 500 });
+    console.error('Error getting current batch:', error);
+    return NextResponse.json(
+      { error: 'Failed to get current batch status' },
+      { status: 500 }
+    );
   }
 }
 
