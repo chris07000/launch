@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as storage from '@/lib/storage-wrapper-db-only';
+import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,25 +58,46 @@ export async function GET(request: NextRequest) {
       // Extra veiligheid: Als er 0 tigers gemint zijn, negeer de isSoldOut status
       if (requestedBatch.mintedTigers === 0 || requestedBatch.mintedWallets === 0) {
         console.log(`Batch ${requestedBatchId} is marked as sold out, but has 0 tigers minted. Treating as not sold out.`);
-        // Update de sold out status in database via direct SQL voor deze situatie
-        try {
-          // Reset de batch
-          await storage.saveBatches([{
-            ...requestedBatch,
-            isSoldOut: false
-          }]);
+        
+        // FIX: Als dit batch 1 is en er zijn geen tigers, forceer een database correctie
+        if (requestedBatchId === 1) {
+          console.log('Attempting EMERGENCY FIX for batch 1 being incorrectly marked as sold out');
           
-          // Als dit de huidige batch is en er is een soldOutAt, reset die ook
-          if (requestedBatchId === currentBatchId && soldOutAt) {
-            await storage.saveCurrentBatch({
-              currentBatch: currentBatchId,
-              soldOutAt: null
-            });
+          try {
+            // Reset batch direct in de database via SQL
+            await sql`
+              UPDATE batches 
+              SET is_sold_out = false 
+              WHERE id = 1
+            `;
+            
+            console.log('Emergency direct SQL fix: Updated batches table');
+            
+            // Reset current batch info
+            await sql`
+              UPDATE current_batch 
+              SET sold_out_at = NULL 
+              WHERE current_batch = 1
+            `;
+            
+            console.log('Emergency direct SQL fix: Updated current_batch table');
+            
+            // Ook via storage wrapper updaten
+            await storage.saveBatches([{
+              ...requestedBatch,
+              isSoldOut: false
+            }]);
+            
+            // Als dit de huidige batch is en er is een soldOutAt, reset die ook
+            if (requestedBatchId === currentBatchId && soldOutAt) {
+              await storage.saveCurrentBatch({
+                currentBatch: currentBatchId,
+                soldOutAt: null
+              });
+            }
+          } catch (error) {
+            console.error('Error during emergency database fix:', error);
           }
-          
-          console.log(`Reset sold out status for batch ${requestedBatchId} because it had 0 tigers minted.`);
-        } catch (error) {
-          console.error(`Error resetting sold out status for batch ${requestedBatchId}:`, error);
         }
       } else {
         return NextResponse.json({
