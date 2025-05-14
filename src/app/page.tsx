@@ -303,7 +303,7 @@ export default function HomePage() {
       
       // Refresh de batch info om meteen de laatste status te hebben
       try {
-        const batchResponse = await fetch('/api/mint/current-batch', {
+        const batchResponse = await fetch('/api/mint/current-batch?t=' + Date.now(), {
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -336,6 +336,20 @@ export default function HomePage() {
       });
       const data = await response.json();
       console.log('Wallet check response:', data);
+      
+      // KRITIEKE HOTFIX: Forceer hier een controle op contradictie en negeer de sold_out status als minted 0 is
+      const ignoreErrorState = 
+        data.reason === 'batch_sold_out' && 
+        data.whitelistedBatch === 1 && 
+        mintedTigers === 0 && 
+        !isSoldOut;
+        
+      if (ignoreErrorState) {
+        console.log('KRITIEKE OVERRIDE: Negeren van sold out status omdat er 0 tigers gemint zijn');
+        // Override de response data lokaal
+        data.eligible = true;
+        data.reason = '';
+      }
 
       // Als wallet eligible is voor de huidige batch
       if (data.eligible) {
@@ -346,7 +360,13 @@ export default function HomePage() {
         // Als de batch waar deze wallet voor is gewhitelist sold out is
         if (data.reason === 'batch_sold_out') {
           const activeBatchId = data.currentBatch || currentBatch || 1;
-          setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${activeBatchId}\nYour wallet is whitelisted for Batch #${data.whitelistedBatch}`);
+          
+          // KRITIEKE FIX: als batch 1 sold out wordt gerapporteerd maar er zijn 0 tigers, forceer een override
+          if (currentBatch === 1 && mintedTigers === 0) {
+            setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
+          } else {
+            setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${activeBatchId}\nYour wallet is whitelisted for Batch #${data.whitelistedBatch}`);
+          }
         }
         // Wallet is gewhitelist voor een andere, niet sold-out batch
         else if (data.reason === 'not_whitelisted_for_batch') {
