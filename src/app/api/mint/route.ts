@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 // BTC/USD koers voor conversie
 const BTC_TO_USD_RATE = parseInt(process.env.BTC_TO_USD_RATE || '40000', 10);
 
+// Forceer nieuwe deployment - tijdstempel: ${new Date().toISOString()}
 // Functie voor USD naar BTC conversie met een kleine unieke verhoging
 function usdToBtc(usdAmount: number): number {
   // Basisomrekening
