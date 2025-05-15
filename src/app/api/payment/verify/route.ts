@@ -134,12 +134,21 @@ async function checkBitcoinPayment(
     console.log(`Expected amount in satoshis: ${expectedAmountSats}`);
     console.log(`Found ${transactions.length} transactions`);
     
-    // Keep track of total received amount
-    let totalReceivedSats = 0;
+    // Get existing orders to prevent duplicate detection
+    const orders = await storage.getOrders();
+    const paidOrders = orders.filter(o => 
+      o.status === 'paid' || o.status === 'completed'
+    );
     
-    // Converteer orderCreatedAt naar timestamp
-    const orderTimestamp = orderCreatedAt.getTime();
-    console.log(`Order timestamp: ${orderTimestamp}`);
+    // Calculate our allowed margin (2% max difference)
+    const minAcceptableAmount = Math.floor(expectedAmountSats * 0.98);
+    const maxAcceptableAmount = Math.ceil(expectedAmountSats * 1.02);
+    console.log(`Acceptable amount range: ${minAcceptableAmount} - ${maxAcceptableAmount} sats`);
+    
+    // Grace period to account for clock differences (2 minutes)
+    const TWO_MINUTES_MS = 2 * 60 * 1000;
+    const orderTimestampWithGrace = orderCreatedAt.getTime() - TWO_MINUTES_MS;
+    console.log(`Order timestamp with grace period: ${new Date(orderTimestampWithGrace).toISOString()}`);
     
     // Loop door elke transactie
     for (const tx of transactions) {
@@ -169,8 +178,8 @@ async function checkBitcoinPayment(
         console.log(`Using time: ${new Date(txTime).toISOString()}`);
       }
       
-      // Skip transactions from before the order was created
-      if (txTime < orderTimestamp) {
+      // Skip transactions from before the order was created (with grace period)
+      if (txTime < orderTimestampWithGrace) {
         console.log(`Skipping old transaction from ${new Date(txTime).toISOString()}`);
         continue;
       }
@@ -209,28 +218,27 @@ async function checkBitcoinPayment(
         }
       }
       
-      // Als deze transactie een betaling bevat, markeer als gebruikt
+      // Als deze transactie een betaling bevat, check of het overeenkomt met het verwachte bedrag
       if (txAmount > 0) {
         console.log(`Transaction ${tx.txid} has payment of ${txAmount} sats`);
-        await markTransactionAsUsed(tx.txid, orderId, txAmount);
-        totalReceivedSats += txAmount;
+        
+        // Check if this transaction's amount is within our acceptable range
+        if (txAmount >= minAcceptableAmount && txAmount <= maxAcceptableAmount) {
+          console.log(`Transaction amount ${txAmount} matches expected amount ${expectedAmountSats} within margin!`);
+          
+          // Mark this transaction as used and associate it with this order
+          await markTransactionAsUsed(tx.txid, orderId, txAmount);
+          return true;
+        } else {
+          console.log(`Transaction amount ${txAmount} is outside acceptable range (${minAcceptableAmount}-${maxAcceptableAmount})`);
+        }
       } else {
         console.log(`Transaction ${tx.txid} has no payments to our address`);
       }
     }
     
-    console.log(`Total received: ${totalReceivedSats} sats (expected: ${expectedAmountSats} sats)`);
-    
-    // Check if we received the full expected amount
-    // Allow a small margin of error (1%)
-    const minAcceptableAmount = expectedAmountSats * 0.99;
-    if (totalReceivedSats >= minAcceptableAmount) {
-      console.log(`Payment verified! Received ${totalReceivedSats} sats (needed at least ${minAcceptableAmount})`);
-      return true;
-    }
-    
-    // Geen geldige betaling gevonden
-    console.log(`Payment verification failed. Received ${totalReceivedSats} < ${minAcceptableAmount} required`);
+    // Geen geldige betaling gevonden voor deze order
+    console.log(`No matching payment found for order ${orderId} with amount ${expectedAmountSats} sats`);
     return false;
   } catch (error) {
     console.error('Error checking Bitcoin payment:', error);

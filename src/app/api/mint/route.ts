@@ -6,9 +6,18 @@ export const dynamic = 'force-dynamic';
 // BTC/USD koers voor conversie
 const BTC_TO_USD_RATE = parseInt(process.env.BTC_TO_USD_RATE || '40000', 10);
 
-// Functie voor USD naar BTC conversie
+// Functie voor USD naar BTC conversie met een kleine unieke verhoging
 function usdToBtc(usdAmount: number): number {
-  return usdAmount / BTC_TO_USD_RATE;
+  // Basisomrekening
+  const baseBtcAmount = usdAmount / BTC_TO_USD_RATE;
+  
+  // Voeg een kleine willekeurige verhoging toe (tussen 0.1% en 1%)
+  const randomIncrease = 1 + (0.001 + Math.random() * 0.009);
+  
+  // Log voor debugging
+  console.log(`USD: ${usdAmount}, Base BTC: ${baseBtcAmount}, Adjusted BTC: ${baseBtcAmount * randomIncrease} (${randomIncrease}x)`);
+  
+  return baseBtcAmount * randomIncrease;
 }
 
 // Helper function for getting current batch ID
