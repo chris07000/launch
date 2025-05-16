@@ -26,6 +26,9 @@ interface OrderStatus {
 
 const BLOCKCHAIN_API_DELAY = 2000; // 2 seconds
 
+// Timeout settings
+const PAYMENT_TIMEOUT_MINUTES = 30; // Orders expire after 30 minutes
+
 /**
  * Functie om de batch teller exact te synchroniseren met de werkelijke data
  * Dit garandeert dat de teller altijd klopt, ongeacht eerdere problemen
@@ -95,6 +98,35 @@ async function startInscriptionProcess(orderId: string): Promise<void> {
   }
 }
 
+// Add this function to mark expired orders
+async function cleanupExpiredOrders(): Promise<void> {
+  try {
+    const orders = await storage.getOrders();
+    const now = new Date();
+    
+    // Find pending orders that are older than the timeout period
+    const expiredOrders = orders.filter(order => {
+      if (order.status !== 'pending') return false;
+      
+      const createdAt = new Date(order.createdAt);
+      const diffMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+      return diffMinutes > PAYMENT_TIMEOUT_MINUTES;
+    });
+    
+    // Mark expired orders as 'expired'
+    for (const order of expiredOrders) {
+      console.log(`Marking order ${order.id} as expired - created at ${order.createdAt}`);
+      await updateOrderStatus(order.id, 'expired');
+    }
+    
+    if (expiredOrders.length > 0) {
+      console.log(`Cleaned up ${expiredOrders.length} expired orders`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up expired orders:', error);
+  }
+}
+
 /**
  * Controleert of een betaling is ontvangen voor een specifiek Bitcoin-adres
  * via een publieke blockchain API
@@ -112,17 +144,44 @@ async function checkBitcoinPayment(
     console.log(`Order created at: ${orderCreatedAt.toISOString()}`);
     console.log(`Order ID: ${orderId}`);
     
-    // Mempool.space API gebruiken om transacties te controleren
-    console.log(`Fetching transactions from mempool.space API for address: ${address}`);
-    const response = await fetch(`https://mempool.space/api/address/${address}/txs`);
+    // Verbeterde error handling voor API calls
+    let retryCount = 0;
+    let transactions = [];
     
-    if (!response.ok) {
-      console.error(`Error fetching transactions: ${response.status} ${response.statusText}`);
-      return false;
+    // Probeer maximaal 3 keer om transacties op te halen
+    while (retryCount < 3) {
+      try {
+        // Mempool.space API gebruiken om transacties te controleren
+        console.log(`Fetching transactions from mempool.space API for address: ${address}`);
+        const response = await fetch(`https://mempool.space/api/address/${address}/txs`);
+        
+        if (!response.ok) {
+          console.error(`Error fetching transactions: ${response.status} ${response.statusText}`);
+          retryCount++;
+          
+          // Wacht 1 seconde tussen retries
+          if (retryCount < 3) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+          
+          return false;
+        }
+        
+        transactions = await response.json();
+        console.log(`API response received:`, JSON.stringify(transactions).substring(0, 500) + '...');
+        break; // Successful response, exit retry loop
+      } catch (error) {
+        console.error(`API error (attempt ${retryCount + 1}):`, error);
+        retryCount++;
+        
+        if (retryCount < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          return false;
+        }
+      }
     }
-    
-    const transactions = await response.json();
-    console.log(`API response received:`, JSON.stringify(transactions).substring(0, 500) + '...');
     
     // Geen transacties gevonden
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -140,10 +199,13 @@ async function checkBitcoinPayment(
       o.status === 'paid' || o.status === 'completed'
     );
     
-    // Ruimere marge voor betalingsvalidatie (5% verschil toegestaan)
-    const minAcceptableAmount = Math.floor(expectedAmountSats * 0.95);
-    const maxAcceptableAmount = Math.ceil(expectedAmountSats * 1.05);
-    console.log(`Acceptable amount range: ${minAcceptableAmount} - ${maxAcceptableAmount} sats (±5%)`);
+    // Ruimere marge voor betalingsvalidatie (nu 10% verschil toegestaan)
+    const minAcceptableAmount = Math.floor(expectedAmountSats * 0.90);
+    console.log(`Acceptable amount minimum: ${minAcceptableAmount} sats (90% of expected)`);
+    
+    // Check for the case with 2 wallets - allow double payment
+    const doubleAmountLowerBound = Math.floor(expectedAmountSats * 1.90); // 190% - giving 10% margin
+    console.log(`Double payment amount would be around: ${doubleAmountLowerBound} sats or more`);
     
     // Grace period to account for clock differences (2 minutes)
     const TWO_MINUTES_MS = 2 * 60 * 1000;
@@ -222,15 +284,42 @@ async function checkBitcoinPayment(
       if (txAmount > 0) {
         console.log(`Transaction ${tx.txid} has payment of ${txAmount} sats`);
         
-        // Check if this transaction's amount is within our acceptable range
-        if (txAmount >= minAcceptableAmount && txAmount <= maxAcceptableAmount) {
-          console.log(`Transaction amount ${txAmount} matches expected amount ${expectedAmountSats} within margin!`);
+        // Verbeterde logica voor betalingsacceptatie
+        // 1. Accepteer als bedrag minimaal 90% is van verwacht bedrag
+        // 2. Accepteer ook als het ongeveer 2x het bedrag is (voor mensen die 2 keer minen)
+        if (txAmount >= minAcceptableAmount) {
+          // Check if it could be a double payment (around 2x the expected amount)
+          if (txAmount >= doubleAmountLowerBound) {
+            console.log(`DOUBLE PAYMENT DETECTED! Transaction amount ${txAmount} is approximately 2x expected amount ${expectedAmountSats}`);
+            console.log(`Checking if we need to update quantity...`);
+            
+            // Get the current order
+            const orders = await storage.getOrders();
+            const currentOrder = orders.find(o => o.id === orderId);
+            
+            if (currentOrder && currentOrder.quantity === 1) {
+              console.log(`Updating order quantity from 1 to 2 based on payment amount`);
+              // Update the order quantity in the database
+              try {
+                await sql`
+                  UPDATE orders 
+                  SET quantity = 2
+                  WHERE id = ${orderId}
+                `;
+                console.log(`Order ${orderId} quantity updated to 2`);
+              } catch (error) {
+                console.error(`Error updating order quantity:`, error);
+              }
+            }
+          }
+          
+          console.log(`Transaction amount ${txAmount} meets minimum requirement of ${minAcceptableAmount}!`);
           
           // Mark this transaction as used and associate it with this order
           await markTransactionAsUsed(tx.txid, orderId, txAmount);
           return true;
         } else {
-          console.log(`Transaction amount ${txAmount} is outside acceptable range (${minAcceptableAmount}-${maxAcceptableAmount})`);
+          console.log(`Transaction amount ${txAmount} is below minimum (${minAcceptableAmount})`);
         }
       } else {
         console.log(`Transaction ${tx.txid} has no payments to our address`);
@@ -251,6 +340,9 @@ async function checkBitcoinPayment(
  */
 export async function POST(request: NextRequest) {
   try {
+    // Clean up expired orders at the beginning of each verification request
+    await cleanupExpiredOrders();
+    
     // Get request body
     const body = await request.json();
     const { orderId } = body;
@@ -273,6 +365,16 @@ export async function POST(request: NextRequest) {
         { error: "Order not found", verified: false },
         { status: 404 }
       );
+    }
+    
+    // If order is already expired, return error
+    if (orderStatus.status === 'expired') {
+      return NextResponse.json({
+        verified: false,
+        status: 'expired',
+        message: 'This order has expired. Please create a new order.',
+        orderId
+      });
     }
     
     // If order is already paid or completed, return success
