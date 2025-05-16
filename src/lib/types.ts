@@ -9,7 +9,7 @@ export interface Order {
   batchId: number;
   paymentAddress: string;
   paymentReference?: string;
-  status: 'pending' | 'paid' | 'completed' | 'failed';
+  status: 'pending' | 'paid' | 'completed' | 'failed' | 'expired';
   createdAt: string;
   updatedAt: string;
   inscriptionId?: string;

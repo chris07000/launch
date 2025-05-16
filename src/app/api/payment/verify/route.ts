@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // Add type definition at the top of the file
 interface OrderStatus {
   id: string;
-  status: 'pending' | 'paid' | 'completed' | 'failed';
+  status: 'pending' | 'paid' | 'completed' | 'failed' | 'expired';
   quantity: number;
   totalPrice: number;
   totalPriceUsd: number;
