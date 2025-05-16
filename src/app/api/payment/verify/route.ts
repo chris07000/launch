@@ -140,10 +140,10 @@ async function checkBitcoinPayment(
       o.status === 'paid' || o.status === 'completed'
     );
     
-    // Calculate our allowed margin (2% max difference)
-    const minAcceptableAmount = Math.floor(expectedAmountSats * 0.98);
-    const maxAcceptableAmount = Math.ceil(expectedAmountSats * 1.02);
-    console.log(`Acceptable amount range: ${minAcceptableAmount} - ${maxAcceptableAmount} sats`);
+    // Ruimere marge voor betalingsvalidatie (5% verschil toegestaan)
+    const minAcceptableAmount = Math.floor(expectedAmountSats * 0.95);
+    const maxAcceptableAmount = Math.ceil(expectedAmountSats * 1.05);
+    console.log(`Acceptable amount range: ${minAcceptableAmount} - ${maxAcceptableAmount} sats (±5%)`);
     
     // Grace period to account for clock differences (2 minutes)
     const TWO_MINUTES_MS = 2 * 60 * 1000;

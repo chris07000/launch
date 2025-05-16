@@ -507,52 +507,7 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
             padding: '20px',
             marginBottom: '24px'
           }}>
-            {/* Amount to Pay */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ color: '#ffd700', fontSize: '12px', marginBottom: '8px' }}>AMOUNT TO PAY</div>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                padding: '12px',
-                border: '1px solid #333'
-              }}>
-                <FaBitcoin color="#f7931a" size={20} />
-                <div style={{ 
-                  color: '#fff', 
-                  fontSize: '18px',
-                  fontFamily: 'monospace'
-                }}>
-                  {formatNumber(totalPriceBtc, 8)} BTC
-                </div>
-                <div style={{
-                  color: '#666',
-                  fontSize: '12px',
-                  marginLeft: '8px'
-                }}>
-                  (${formatNumber(totalPriceUsd, 2)})
-                </div>
-                <button
-                  onClick={() => copyToClipboard(totalPriceBtc?.toString() || '0')}
-                  style={{
-                    marginLeft: 'auto',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '4px'
-                  }}
-                >
-                  {copied ? (
-                    <FaCheckCircle color="#16a34a" size={16} />
-                  ) : (
-                    <FaCopy color="#666" size={16} />
-                  )}
-                </button>
-              </div>
-            </div>
+            {/* We verwijderen de dubbele bedragweergave en houden alleen de prominente weergave in het midden */}
             
             {/* Payment Container - Only show if not completed */}
             <div className="responsive-padding" style={{ 
@@ -592,7 +547,7 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
                   </div>
                 </div>
                 
-                {/* AMOUNT */}
+                {/* AMOUNT - Eén consistente weergave met 8 decimalen en waarschuwing */}
                 <div style={{ flex: '1', marginTop: isMobile ? '16px' : '0' }}>
                   <div style={{ color: '#ffd700', textShadow: '1px 1px 0 #000', marginBottom: '6px', fontSize: '12px' }}>AMOUNT TO PAY:</div>
                   <div style={{ 
@@ -607,7 +562,34 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    <span style={{ fontSize: '14px' }}>{formatNumber(totalPriceBtc, 6)} BTC</span>
+                    <span style={{ fontSize: '14px' }}>{formatNumber(totalPriceBtc, 8)} BTC</span>
+                    <button
+                      onClick={() => copyToClipboard(totalPriceBtc?.toString() || '0')}
+                      style={{
+                        marginLeft: '8px',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '4px'
+                      }}
+                    >
+                      {copied ? (
+                        <FaCheckCircle color="#16a34a" size={16} />
+                      ) : (
+                        <FaCopy color="#666" size={16} />
+                      )}
+                    </button>
+                  </div>
+                  <div style={{ 
+                    color: '#ef4444', 
+                    fontSize: '9px', 
+                    marginTop: '4px', 
+                    fontWeight: 'bold',
+                    textAlign: 'center'
+                  }}>
+                    ⚠️ BETAAL EXACT DIT BEDRAG ⚠️
                   </div>
                 </div>
               </div>
@@ -728,7 +710,7 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
                 </div>
                 
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#ffd700', fontWeight: 'bold' }}>
-                  {formatNumber(totalPriceBtc, 6)} BTC
+                  {formatNumber(totalPriceBtc, 8)} BTC
                 </div>
                 <div style={{ marginTop: '4px', fontSize: '8px', color: '#aaa', textAlign: 'center' }}>
                   Scan QR code with your Bitcoin wallet to pay
@@ -746,12 +728,13 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
                 lineHeight: '1.4'
               }}>
                 <ol style={{ paddingLeft: '15px' }}>
-                  <li>Send the exact amount to the payment address (bc1q) above</li>
-                  <li>Your payment will be detected automatically</li>
-                  <li>Your Tigers from Batch #{paymentData.batchId} will be sent to your Taproot address (bc1p) within 24 hours</li>
+                  <li><span style={{ color: '#ef4444', fontWeight: 'bold' }}>Betaal EXACT {formatNumber(totalPriceBtc, 8)} BTC</span> naar het betalingsadres (bc1q) hierboven</li>
+                  <li>Je betaling wordt automatisch gedetecteerd</li>
+                  <li>Je Tigers uit Batch #{paymentData.batchId} worden binnen 24 uur naar je Taproot-adres (bc1p) gestuurd</li>
                 </ol>
                 <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #333', fontSize: '8px', color: '#aaa' }}>
-                  • Important: bc1p addresses are for receiving Ordinals • bc1q addresses are for payments
+                  • Belangrijk: bc1p-adressen zijn voor het ontvangen van Ordinals • bc1q-adressen zijn voor betalingen<br/>
+                  • Gebruik het exacte bedrag hierboven voor een snellere verwerking
                 </div>
               </div>
             </div>
