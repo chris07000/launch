@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get request body
     const body = await request.json();
-    const { orderId, txId, adminKey } = body;
+    const { orderId, txId, admin_password } = body;
     
     // Validate required fields
     if (!orderId) {
@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
     }
     
-    // Validate admin key
-    const validAdminKey = process.env.ADMIN_API_KEY;
-    if (!validAdminKey || adminKey !== validAdminKey) {
+    // Validate admin password
+    const validAdminPassword = process.env.ADMIN_PASSWORD;
+    if (!validAdminPassword || admin_password !== validAdminPassword) {
       console.log('Unauthorized admin action attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -130,11 +130,11 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   return NextResponse.json({
     info: "Admin tool to fix payment issues",
-    usage: "Send a POST request with the following JSON body: { orderId: 'order_id', txId: 'transaction_id', adminKey: 'your_admin_key' }",
+    usage: "Send a POST request with the following JSON body: { orderId: 'order_id', txId: 'transaction_id', admin_password: 'your_admin_password' }",
     example: {
       orderId: "order_1234567890",
       txId: "abcdef1234567890", 
-      adminKey: "your_admin_key"
+      admin_password: "your_admin_password"
     }
   });
 } 
