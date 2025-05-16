@@ -560,7 +560,7 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
                     fontWeight: 'bold',
                     textAlign: 'center'
                   }}>
-                    ⚠️ BETAAL EXACT DIT BEDRAG ⚠️
+                    ⚠️ PAY EXACT AMOUNT ⚠️
                   </div>
                 </div>
               </div>
@@ -699,13 +699,13 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
                 lineHeight: '1.4'
               }}>
                 <ol style={{ paddingLeft: '15px' }}>
-                  <li><span style={{ color: '#ef4444', fontWeight: 'bold' }}>Betaal EXACT {formatNumber(totalPriceBtc, 8)} BTC</span> naar het betalingsadres (bc1q) hierboven</li>
-                  <li>Je betaling wordt automatisch gedetecteerd</li>
-                  <li>Je Tigers uit Batch #{paymentData.batchId} worden binnen 24 uur naar je Taproot-adres (bc1p) gestuurd</li>
+                  <li><span style={{ color: '#ef4444', fontWeight: 'bold' }}>Pay EXACTLY {formatNumber(totalPriceBtc, 8)} BTC</span> to the payment address (bc1q) above</li>
+                  <li>Your payment will be automatically detected</li>
+                  <li>Your Tigers from Batch #{paymentData.batchId} will be sent to your Taproot address (bc1p) within 24 hours</li>
                 </ol>
                 <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #333', fontSize: '8px', color: '#aaa' }}>
-                  • Belangrijk: bc1p-adressen zijn voor het ontvangen van Ordinals • bc1q-adressen zijn voor betalingen<br/>
-                  • Gebruik het exacte bedrag hierboven voor een snellere verwerking
+                  • Important: bc1p addresses are for receiving Ordinals • bc1q addresses are for payments<br/>
+                  • Use the exact amount above for faster processing
                 </div>
               </div>
             </div>
