@@ -67,10 +67,20 @@ export async function PATCH(
     
     // Request body ophalen
     const body = await request.json();
-    const { status } = body;
+    const { status, adminKey } = body;
+    
+    // Check for admin key - only allow direct status updates from admin endpoints
+    const validAdminKey = process.env.ADMIN_API_KEY;
+    if (!validAdminKey || adminKey !== validAdminKey) {
+      console.log(`SECURITY: Rejected unauthorized status update attempt for order ${orderId}`);
+      return NextResponse.json(
+        { error: 'Unauthorized: Direct status updates are not allowed' },
+        { status: 403 }
+      );
+    }
     
     // Valideer status
-    if (!status || !['pending', 'paid', 'completed', 'failed'].includes(status)) {
+    if (!status || !['pending', 'paid', 'completed', 'failed', 'expired'].includes(status)) {
       return NextResponse.json(
         { error: 'Invalid status' },
         { status: 400 }
@@ -80,7 +90,7 @@ export async function PATCH(
     // Order status updaten
     const updatedOrder = await updateOrderStatus(
       orderId,
-      status as 'pending' | 'paid' | 'completed' | 'failed'
+      status as 'pending' | 'paid' | 'completed' | 'failed' | 'expired'
     );
     
     console.log(`Order ${orderId} status updated to ${status}:`, updatedOrder);

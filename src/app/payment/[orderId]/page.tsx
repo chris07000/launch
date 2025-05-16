@@ -163,35 +163,6 @@ export default function PaymentPage({ params }: { params: { orderId: string } })
     setTimeout(() => setCopied(false), 2000);
   };
   
-  // Function to simulate payment completion (for development)
-  const simulatePayment = async () => {
-    try {
-      // Only for demonstration purposes
-      const response = await fetch(`/api/mint/${params.orderId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: paymentStatus === 'pending' ? 'paid' : 'completed'
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update status');
-      }
-      
-      const data = await response.json();
-      setPaymentStatus(data.status);
-      
-      if (data.status === 'completed') {
-        setShowOrdinal(true);
-      }
-    } catch (err) {
-      console.error('Error simulating payment:', err);
-    }
-  };
-  
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black text-white pixel-grid-bg flex items-center justify-center" style={{ fontFamily: "'Press Start 2P', monospace" }}>
