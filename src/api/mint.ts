@@ -88,6 +88,8 @@ const batchesConfig: Record<number, BatchConfig> = {
 // In-memory storage for inscriptions
 let inscriptions: Inscription[] = [];
 
+export type OrderStatus = 'pending' | 'paid' | 'completed' | 'failed' | 'expired';
+
 /**
  * Check of een wallet al heeft gemint in een specifieke batch
  */
@@ -605,7 +607,7 @@ export async function getOrderStatus(orderId: string): Promise<storage.Order> {
 /**
  * API handler voor het updaten van een order status
  */
-export async function updateOrderStatus(orderId: string, status: storage.Order['status']): Promise<boolean> {
+export async function updateOrderStatus(orderId: string, status: storage.Order['status'] | 'expired'): Promise<boolean> {
   try {
     const orders = await storage.getOrders();
     const orderIndex = orders.findIndex(o => o.id === orderId);
