@@ -419,8 +419,8 @@ export async function GET(request: NextRequest) {
 }
 
 async function checkPayment(reference: string): Promise<{ confirmed: boolean }> {
-  // TODO: Implement actual payment verification logic
-  // For now, just return confirmed: true for development/testing
-  console.log(`Automatic payment confirmation for reference: ${reference} (development only)`);
-  return { confirmed: true };
+  // CRITICAL SECURITY FIX: Disabled automatic payment confirmation
+  // This was causing orders to be marked as completed without actual payment
+  console.log(`Payment verification via GET is disabled, reference: ${reference}`);
+  return { confirmed: false };
 } 
