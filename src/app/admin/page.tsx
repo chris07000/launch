@@ -1465,6 +1465,24 @@ export default function AdminPage() {
                             </button>
                           </div>
                           
+                          <div style={{ 
+                            marginTop: '12px',
+                            display: 'flex',
+                            justifyContent: 'center'
+                          }}>
+                            <Link 
+                              href="/admin/bulk-whitelist"
+                              style={{
+                                color: '#ffd700',
+                                fontSize: '10px',
+                                textDecoration: 'underline',
+                                padding: '4px 8px'
+                              }}
+                            >
+                              BULK WHITELIST TOOL →
+                            </Link>
+                          </div>
+                          
                           {error && (
                             <div style={{ 
                               marginTop: '12px',
