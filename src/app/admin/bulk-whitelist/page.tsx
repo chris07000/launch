@@ -20,11 +20,14 @@ export default function BulkWhitelistPage() {
     }
     
     try {
-      const response = await fetch('/api/admin?password=' + encodeURIComponent(password));
+      const response = await fetch(`/api/admin?password=${encodeURIComponent(password)}&action=dashboard`);
       if (!response.ok) {
         throw new Error('Authentication failed');
       }
       setAuthenticated(true);
+      
+      // Save password to localStorage for API calls
+      localStorage.setItem('admin_password', password);
     } catch (error: any) {
       setError(error.message);
     }
