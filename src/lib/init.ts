@@ -2,22 +2,22 @@ import { sql } from '@vercel/postgres';
 import { initializeDatabase } from './db';
 
 const defaultBatches = [
-  { id: 1, price: 250.00, maxWallets: 33, ordinals: 66 },
-  { id: 2, price: 260.71, maxWallets: 33, ordinals: 66 },
-  { id: 3, price: 271.43, maxWallets: 33, ordinals: 66 },
-  { id: 4, price: 282.14, maxWallets: 33, ordinals: 66 },
-  { id: 5, price: 292.86, maxWallets: 33, ordinals: 66 },
-  { id: 6, price: 303.57, maxWallets: 33, ordinals: 66 },
-  { id: 7, price: 314.29, maxWallets: 33, ordinals: 66 },
-  { id: 8, price: 325.00, maxWallets: 33, ordinals: 66 },
-  { id: 9, price: 335.71, maxWallets: 33, ordinals: 66 },
-  { id: 10, price: 346.43, maxWallets: 33, ordinals: 66 },
-  { id: 11, price: 357.14, maxWallets: 33, ordinals: 66 },
-  { id: 12, price: 367.86, maxWallets: 33, ordinals: 66 },
-  { id: 13, price: 378.57, maxWallets: 33, ordinals: 66 },
-  { id: 14, price: 389.29, maxWallets: 33, ordinals: 66 },
-  { id: 15, price: 400.00, maxWallets: 33, ordinals: 66 },
-  { id: 16, price: 450.00, maxWallets: 33, ordinals: 66 }
+  { id: 1, price: 250.00, maxWallets: 999, ordinals: 66 },
+  { id: 2, price: 260.71, maxWallets: 999, ordinals: 66 },
+  { id: 3, price: 271.43, maxWallets: 999, ordinals: 66 },
+  { id: 4, price: 282.14, maxWallets: 999, ordinals: 66 },
+  { id: 5, price: 292.86, maxWallets: 999, ordinals: 66 },
+  { id: 6, price: 303.57, maxWallets: 999, ordinals: 66 },
+  { id: 7, price: 314.29, maxWallets: 999, ordinals: 66 },
+  { id: 8, price: 325.00, maxWallets: 999, ordinals: 66 },
+  { id: 9, price: 335.71, maxWallets: 999, ordinals: 66 },
+  { id: 10, price: 346.43, maxWallets: 999, ordinals: 66 },
+  { id: 11, price: 357.14, maxWallets: 999, ordinals: 66 },
+  { id: 12, price: 367.86, maxWallets: 999, ordinals: 66 },
+  { id: 13, price: 378.57, maxWallets: 999, ordinals: 66 },
+  { id: 14, price: 389.29, maxWallets: 999, ordinals: 66 },
+  { id: 15, price: 400.00, maxWallets: 999, ordinals: 66 },
+  { id: 16, price: 450.00, maxWallets: 999, ordinals: 66 }
 ];
 
 async function importDefaultBatches() {

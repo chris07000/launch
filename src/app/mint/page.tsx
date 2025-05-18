@@ -335,21 +335,21 @@ export default function Home() {
 
   // In-memory batches fallback for when API is not available
   const batchesFallback: Batch[] = [
-    { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 4, price: 282.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 5, price: 292.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 6, price: 303.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 7, price: 314.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 8, price: 325.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 9, price: 335.71, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 10, price: 346.43, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 11, price: 357.14, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 12, price: 367.86, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false },
-    { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 33, ordinals: 66, isSoldOut: false }
+    { id: 1, price: 250.00, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 2, price: 260.71, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 3, price: 271.43, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 4, price: 282.14, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 5, price: 292.86, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 6, price: 303.57, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 7, price: 314.29, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 8, price: 325.00, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 9, price: 335.71, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 10, price: 346.43, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 11, price: 357.14, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 12, price: 367.86, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 13, price: 378.57, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 14, price: 389.29, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false },
+    { id: 15, price: 400.00, mintedWallets: 0, maxWallets: 999, ordinals: 66, isSoldOut: false }
   ];
 
   // Update price calculation with null check and type safety

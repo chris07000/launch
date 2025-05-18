@@ -67,22 +67,22 @@ loadWhitelist();
 
 // Configuratie van batches
 const batchesConfig: Record<number, BatchConfig> = {
-  1: { id: 1, price: 250.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  2: { id: 2, price: 260.71, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  3: { id: 3, price: 271.43, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  4: { id: 4, price: 282.14, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  5: { id: 5, price: 292.86, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  6: { id: 6, price: 303.57, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  7: { id: 7, price: 314.29, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  8: { id: 8, price: 325.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  9: { id: 9, price: 335.71, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  10: { id: 10, price: 346.43, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  11: { id: 11, price: 357.14, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  12: { id: 12, price: 367.86, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  13: { id: 13, price: 378.57, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  14: { id: 14, price: 389.29, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  15: { id: 15, price: 400.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false },
-  16: { id: 16, price: 450.00, maxWallets: 33, mintedWallets: 0, ordinals: 66, isSoldOut: false }
+  1: { id: 1, price: 250.00, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  2: { id: 2, price: 260.71, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  3: { id: 3, price: 271.43, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  4: { id: 4, price: 282.14, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  5: { id: 5, price: 292.86, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  6: { id: 6, price: 303.57, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  7: { id: 7, price: 314.29, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  8: { id: 8, price: 325.00, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  9: { id: 9, price: 335.71, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  10: { id: 10, price: 346.43, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  11: { id: 11, price: 357.14, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  12: { id: 12, price: 367.86, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  13: { id: 13, price: 378.57, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  14: { id: 14, price: 389.29, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  15: { id: 15, price: 400.00, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false },
+  16: { id: 16, price: 450.00, maxWallets: 999, mintedWallets: 0, ordinals: 66, isSoldOut: false }
 };
 
 // In-memory storage for inscriptions
@@ -116,7 +116,7 @@ export async function isBatchAvailable(batchId: number): Promise<boolean> {
   }
   
   // Legacy approach - fallback to wallets with null check
-  const maxWallets = batch.maxWallets || 33; // Default to 33 if maxWallets is undefined
+  const maxWallets = batch.maxWallets || 999; // Default to 999 if maxWallets is undefined
   return batch.mintedWallets < maxWallets;
 }
 
@@ -147,7 +147,7 @@ export async function markBatchAsSoldOut(
     );
   } else {
     // Legacy approach - use wallet count
-    const maxWallets = batch.maxWallets || 33; // Default to 33 if maxWallets is undefined
+    const maxWallets = batch.maxWallets || 999; // Default to 999 if maxWallets is undefined
     console.log(
       `Batch ${batch.id} has reached its maximum wallets (${maxWallets}). Setting to sold out.`
     );
