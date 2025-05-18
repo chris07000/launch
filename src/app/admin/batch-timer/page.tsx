@@ -104,7 +104,7 @@ export default function BatchTimerPage() {
         loadBatchDurations();
         
         // Reset form if setting a new batch duration
-        if (selectedBatchId !== '') {
+        if (typeof selectedBatchId === 'number') {
           setSelectedBatchId('');
           setDurationMinutes(60);
         }
