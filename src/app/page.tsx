@@ -24,6 +24,10 @@ export default function HomePage() {
   const [progressPercentage, setProgressPercentage] = useState<number>(0);
   const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
   const [formattedTimeLeft, setFormattedTimeLeft] = useState<string>('0m 0s');
+  const [batchTimerActive, setBatchTimerActive] = useState<boolean>(false);
+  const [batchTimerEndTime, setBatchTimerEndTime] = useState<number | null>(null);
+  const [batchTimerTimeLeft, setBatchTimerTimeLeft] = useState<number | null>(null);
+  const [formattedBatchTimerTimeLeft, setFormattedBatchTimerTimeLeft] = useState<string>('');
   const router = useRouter();
 
   // Detect mobile device
@@ -51,6 +55,13 @@ export default function HomePage() {
       } else {
         setFormattedTimeLeft('0m 0s');
       }
+
+      // Update batch timer formatted time if active
+      if (batchTimerActive && batchTimerTimeLeft !== null && batchTimerTimeLeft > 0) {
+        setFormattedBatchTimerTimeLeft(formatTimeLeft(batchTimerTimeLeft));
+      } else if (batchTimerActive && batchTimerTimeLeft !== null && batchTimerTimeLeft <= 0) {
+        setFormattedBatchTimerTimeLeft('0m 0s');
+      }
     };
     
     // Update initially
@@ -61,7 +72,7 @@ export default function HomePage() {
     
     // Clean up
     return () => clearInterval(formattingInterval);
-  }, [timeLeft, isSoldOut]);
+  }, [timeLeft, isSoldOut, batchTimerActive, batchTimerTimeLeft]);
 
   // Aparte timer voor aftellen zonder pagina-refresh
   useEffect(() => {
@@ -73,6 +84,31 @@ export default function HomePage() {
       return () => clearInterval(timerInterval);
     }
   }, [isSoldOut]);
+
+  // Separate timer for batch timer countdown
+  useEffect(() => {
+    if (batchTimerActive && batchTimerEndTime) {
+      const updateBatchTimer = () => {
+        const now = Date.now();
+        const timeLeft = Math.max(0, batchTimerEndTime - now);
+        setBatchTimerTimeLeft(timeLeft);
+        
+        // If timer has just finished, reload to get updated batch status
+        if (timeLeft <= 0 && batchTimerTimeLeft && batchTimerTimeLeft > 1000) {
+          window.location.reload();
+        }
+      };
+      
+      // Initial update
+      updateBatchTimer();
+      
+      // Set interval to update every second
+      const timerInterval = setInterval(updateBatchTimer, 1000);
+      
+      // Clean up
+      return () => clearInterval(timerInterval);
+    }
+  }, [batchTimerActive, batchTimerEndTime, batchTimerTimeLeft]);
 
   // Effect voor controle of timer bijna op 0 staat
   useEffect(() => {
@@ -118,6 +154,19 @@ export default function HomePage() {
         } else {
           setIsSoldOut(false);
           setTimeLeft(0);
+        }
+
+        // Check if batch has an active timer
+        if (data.hasTimer && data.timerEndTime) {
+          setBatchTimerActive(true);
+          setBatchTimerEndTime(data.timerEndTime);
+          if (data.timeLeft) {
+            setBatchTimerTimeLeft(data.timeLeft);
+          }
+        } else {
+          setBatchTimerActive(false);
+          setBatchTimerEndTime(null);
+          setBatchTimerTimeLeft(null);
         }
 
         const mintedTigersCount = data.mintedTigers || 0;
@@ -582,71 +631,98 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* Sold Out Status */}
-              {isSoldOut && (
-                <div className="sold-out-container" style={{
-                  marginBottom: '20px',
-                  padding: '15px',
-                  background: 'linear-gradient(to right, #000000, #111111)',
-                  border: 'none',
-                  borderLeft: '4px solid #ffd700',
-                  color: 'white',
-                  textAlign: 'center',
-                  borderRadius: '0 4px 4px 0',
-                  position: 'relative',
-                  overflow: 'hidden'
+              {/* Current Batch */}
+              <div style={{ 
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                border: '2px solid #ffd700',
+                padding: '20px',
+                textAlign: 'center',
+                marginBottom: '40px'
+              }}>
+                <h3 style={{ 
+                  color: '#ffd700', 
+                  fontSize: isMobile ? '14px' : '16px',
+                  marginBottom: '15px' 
                 }}>
-                  {/* Gold accent at top */}
+                  CURRENT BATCH: #{currentBatch}
+                </h3>
+                
+                {/* Display batch timer if active */}
+                {batchTimerActive && batchTimerTimeLeft !== null && batchTimerTimeLeft > 0 && (
                   <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '1px',
-                    background: 'linear-gradient(to right, transparent, #ffd700, transparent)'
-                  }}></div>
-                  
-                  <div style={{ 
-                    fontSize: '16px', 
-                    fontWeight: 'bold', 
-                    marginBottom: '8px',
-                    letterSpacing: '2px',
-                    color: '#ffd700'
+                    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                    border: '1px solid #ffd700',
+                    padding: '10px',
+                    marginBottom: '15px',
+                    borderRadius: '4px'
                   }}>
-                    BATCH {currentBatch} SOLD OUT
-                  </div>
-                  
-                  <div style={{ 
-                    fontSize: '13px',
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}>
-                    <span style={{ opacity: 0.7 }}>Next batch opens in:</span> 
-                    <span style={{ 
-                      fontFamily: 'monospace', 
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      padding: '2px 6px',
-                      borderRadius: '2px',
-                      letterSpacing: '1px'
+                    <div style={{
+                      fontSize: isMobile ? '10px' : '12px',
+                      color: '#ffd700',
+                      fontWeight: 'bold',
+                      marginBottom: '5px'
                     }}>
-                      {formattedTimeLeft}
-                    </span>
+                      BATCH TIMER ACTIVE
+                    </div>
+                    <div style={{
+                      fontSize: isMobile ? '16px' : '18px',
+                      color: '#ffffff',
+                      fontWeight: 'bold'
+                    }}>
+                      {formattedBatchTimerTimeLeft}
+                    </div>
+                    <div style={{
+                      fontSize: isMobile ? '8px' : '10px',
+                      color: '#aaaaaa',
+                      marginTop: '5px'
+                    }}>
+                      Mint before timer ends!
+                    </div>
                   </div>
-                  
-                  {/* Gold accent at bottom */}
+                )}
+                
+                {/* Display sold out message if batch is sold out */}
+                {isSoldOut ? (
                   <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: '1px',
-                    background: 'linear-gradient(to right, transparent, #ffd700, transparent)'
-                  }}></div>
-                </div>
-              )}
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                    border: '1px solid #ff0000',
+                    padding: '10px',
+                    marginBottom: '15px',
+                    borderRadius: '4px'
+                  }}>
+                    <div style={{
+                      fontSize: isMobile ? '10px' : '12px',
+                      color: '#ff0000',
+                      fontWeight: 'bold',
+                      marginBottom: '5px'
+                    }}>
+                      BATCH #{currentBatch} SOLD OUT
+                    </div>
+                    <div style={{
+                      fontSize: isMobile ? '8px' : '10px',
+                      color: '#aaaaaa'
+                    }}>
+                      Next batch in: {formattedTimeLeft}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                    border: '1px solid #00ff00',
+                    padding: '10px',
+                    marginBottom: '15px',
+                    borderRadius: '4px'
+                  }}>
+                    <div style={{
+                      fontSize: isMobile ? '10px' : '12px',
+                      color: '#00ff00',
+                      fontWeight: 'bold'
+                    }}>
+                      BATCH #{currentBatch} AVAILABLE
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Progress Bar */}
               <div style={{ 
