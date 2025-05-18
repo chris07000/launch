@@ -1374,7 +1374,7 @@ export default function AdminPage() {
                                 {isExpired ? (
                                   'VERLOPEN'
                                 ) : (
-                                  `${hours}u ${minutes}m resterend`
+                                  `${hours}h ${minutes}m resterend`
                                 )}
                               </div>
                               

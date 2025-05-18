@@ -280,7 +280,7 @@ export default function HomePage() {
     }
     
     if (hours > 0 || days > 0) {
-      formattedTime += `${hours}u `;
+      formattedTime += `${hours}h `;
     }
     
     formattedTime += `${minutes}m`;
