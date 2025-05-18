@@ -50,6 +50,16 @@ export default function AdminPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [mintStartDateString, setMintStartDateString] = useState('');
+  const [batchTimers, setBatchTimers] = useState<{
+    [key: string]: {
+      batchId: number;
+      startTime: number | null;
+      endTime: number | null;
+      durationMinutes: number | null;
+    }
+  }>({});
+  const [selectedBatchForTimer, setSelectedBatchForTimer] = useState(1);
+  const [timerDurationMinutes, setTimerDurationMinutes] = useState(60); // Default to 1 hour
 
   const authenticate = async () => {
     if (!password) {
@@ -723,6 +733,25 @@ export default function AdminPage() {
     loadMintStartTime();
   }, [authenticated]);
 
+  // Load batch timers
+  useEffect(() => {
+    const loadBatchTimers = async () => {
+      try {
+        if (authenticated) {
+          const response = await fetch('/api/admin/set-batch-timer');
+          const data = await response.json();
+          
+          console.log("Loaded batch timers:", data);
+          setBatchTimers(data);
+        }
+      } catch (error) {
+        console.error('Error loading batch timers:', error);
+      }
+    };
+    
+    loadBatchTimers();
+  }, [authenticated]);
+
   return (
     <div className="min-h-screen bg-black text-white pixel-grid-bg" style={{ fontFamily: "'Press Start 2P', monospace" }}>
       <div className="responsive-container" style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px 16px' }}>
@@ -1292,6 +1321,297 @@ export default function AdminPage() {
                   WALLET LIMIET OPSLAAN
                 </button>
               </div>
+              
+              {/* Batch Timer Settings Section */}
+              {activeTab === 'batches' && (
+                <div style={{
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  border: '2px solid #ffd700',
+                  padding: '20px',
+                  marginBottom: '30px',
+                  borderRadius: '4px'
+                }}>
+                  <h2 style={{ color: '#ffd700', fontSize: '18px', marginBottom: '15px' }}>BATCH TIMER INSTELLEN</h2>
+                  
+                  {/* Current Batch Timers Display */}
+                  <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#111', borderRadius: '4px' }}>
+                    <h3 style={{ color: '#aaa', fontSize: '14px', marginBottom: '10px' }}>Actieve Batch Timers:</h3>
+                    {Object.keys(batchTimers).length === 0 ? (
+                      <div style={{ color: '#999', fontSize: '12px', padding: '10px' }}>
+                        Geen actieve timers ingesteld
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+                        {Object.entries(batchTimers).map(([batchId, timer]) => {
+                          const now = Date.now();
+                          const timeLeft = timer.endTime ? timer.endTime - now : 0;
+                          const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                          const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                          const isExpired = timeLeft <= 0;
+                          
+                          return (
+                            <div key={batchId} style={{ 
+                              padding: '12px', 
+                              backgroundColor: isExpired ? '#331111' : '#222', 
+                              borderRadius: '4px', 
+                              position: 'relative',
+                              border: `1px solid ${isExpired ? '#ff4444' : '#444'}`
+                            }}>
+                              <div style={{ color: '#ffd700', fontSize: '14px', marginBottom: '5px' }}>
+                                Batch #{timer.batchId}
+                              </div>
+                              
+                              <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '5px' }}>
+                                Duur: {timer.durationMinutes} minuten
+                              </div>
+                              
+                              <div style={{ 
+                                fontSize: '14px', 
+                                color: isExpired ? '#ff6666' : '#66ff66',
+                                fontWeight: 'bold',
+                                marginBottom: '10px'
+                              }}>
+                                {isExpired ? (
+                                  'VERLOPEN'
+                                ) : (
+                                  `${hours}u ${minutes}m resterend`
+                                )}
+                              </div>
+                              
+                              {!isExpired && (
+                                <div style={{ fontSize: '10px', color: '#999' }}>
+                                  Batch sluit automatisch op:
+                                  <br />
+                                  {new Date(timer.endTime || 0).toLocaleString()}
+                                </div>
+                              )}
+                              
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`Weet je zeker dat je de timer voor Batch #${timer.batchId} wilt verwijderen?`)) {
+                                    try {
+                                      const response = await fetch(`/api/admin/set-batch-timer?batchId=${timer.batchId}&password=${encodeURIComponent(password)}`, {
+                                        method: 'DELETE'
+                                      });
+
+                                      if (!response.ok) {
+                                        throw new Error('Failed to remove batch timer');
+                                      }
+
+                                      // Refresh timers
+                                      const timersResponse = await fetch('/api/admin/set-batch-timer');
+                                      const timersData = await timersResponse.json();
+                                      setBatchTimers(timersData);
+
+                                      alert(`Timer voor Batch #${timer.batchId} succesvol verwijderd!`);
+                                    } catch (error) {
+                                      console.error('Error removing batch timer:', error);
+                                      alert('Kon batch timer niet verwijderen');
+                                    }
+                                  }
+                                }}
+                                style={{
+                                  backgroundColor: '#ff4444',
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  border: 'none',
+                                  borderRadius: '2px',
+                                  fontSize: '10px',
+                                  cursor: 'pointer',
+                                  position: 'absolute',
+                                  right: '8px',
+                                  bottom: '8px'
+                                }}
+                              >
+                                VERWIJDER
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{ marginBottom: '15px', fontSize: '14px', color: '#999' }}>
+                    Stel een timer in voor een batch. De batch wordt automatisch gesloten wanneer de timer afloopt:
+                  </div>
+                  
+                  {/* Batch selector */}
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '12px', color: '#aaa' }}>
+                      Selecteer batch:
+                    </label>
+                    <select
+                      value={selectedBatchForTimer}
+                      onChange={(e) => setSelectedBatchForTimer(parseInt(e.target.value))}
+                      style={{
+                        backgroundColor: 'black',
+                        border: '1px solid #ffd700',
+                        color: 'white',
+                        padding: '10px',
+                        fontSize: '14px',
+                        width: '100%',
+                        marginBottom: '15px'
+                      }}
+                    >
+                      {Array.from({ length: 16 }, (_, i) => i + 1).map((batchId) => (
+                        <option key={batchId} value={batchId}>
+                          Batch #{batchId} {batchTimers[batchId] ? ' (timer actief)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Duration input */}
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '12px', color: '#aaa' }}>
+                      Timer duur (in minuten):
+                    </label>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                      <button
+                        onClick={() => setTimerDurationMinutes(30)}
+                        style={{
+                          backgroundColor: timerDurationMinutes === 30 ? '#ffd700' : '#333',
+                          color: timerDurationMinutes === 30 ? 'black' : 'white',
+                          border: 'none',
+                          padding: '10px',
+                          fontSize: '12px',
+                          flex: '1',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        30 min
+                      </button>
+                      <button
+                        onClick={() => setTimerDurationMinutes(60)}
+                        style={{
+                          backgroundColor: timerDurationMinutes === 60 ? '#ffd700' : '#333',
+                          color: timerDurationMinutes === 60 ? 'black' : 'white',
+                          border: 'none',
+                          padding: '10px',
+                          fontSize: '12px',
+                          flex: '1',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        1 uur
+                      </button>
+                      <button
+                        onClick={() => setTimerDurationMinutes(120)}
+                        style={{
+                          backgroundColor: timerDurationMinutes === 120 ? '#ffd700' : '#333',
+                          color: timerDurationMinutes === 120 ? 'black' : 'white',
+                          border: 'none',
+                          padding: '10px',
+                          fontSize: '12px',
+                          flex: '1',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        2 uur
+                      </button>
+                      <button
+                        onClick={() => setTimerDurationMinutes(360)}
+                        style={{
+                          backgroundColor: timerDurationMinutes === 360 ? '#ffd700' : '#333',
+                          color: timerDurationMinutes === 360 ? 'black' : 'white',
+                          border: 'none',
+                          padding: '10px',
+                          fontSize: '12px',
+                          flex: '1',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        6 uur
+                      </button>
+                    </div>
+                    <div style={{ marginTop: '10px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10080" // 1 week in minutes
+                        value={timerDurationMinutes}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 60;
+                          setTimerDurationMinutes(Math.min(10080, Math.max(1, val)));
+                        }}
+                        style={{
+                          backgroundColor: 'black',
+                          border: '1px solid #ffd700',
+                          color: 'white',
+                          padding: '10px',
+                          fontSize: '14px',
+                          width: '100%'
+                        }}
+                      />
+                      <div style={{ fontSize: '10px', color: '#999', marginTop: '5px' }}>
+                        Aangepaste duur (1-10080 minuten, max 1 week)
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Check if a timer already exists for this batch
+                        if (batchTimers[selectedBatchForTimer]) {
+                          if (!confirm(`Er is al een timer actief voor Batch #${selectedBatchForTimer}. Wil je deze overschrijven?`)) {
+                            return;
+                          }
+                        }
+                        
+                        const response = await fetch('/api/admin/set-batch-timer', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({
+                            batchId: selectedBatchForTimer,
+                            durationMinutes: timerDurationMinutes,
+                            password: password
+                          })
+                        });
+
+                        if (!response.ok) {
+                          throw new Error('Failed to set batch timer');
+                        }
+
+                        // Refresh timers
+                        const timersResponse = await fetch('/api/admin/set-batch-timer');
+                        const timersData = await timersResponse.json();
+                        setBatchTimers(timersData);
+
+                        alert(`Timer voor Batch #${selectedBatchForTimer} succesvol ingesteld voor ${timerDurationMinutes} minuten!`);
+                      } catch (error) {
+                        console.error('Error setting batch timer:', error);
+                        alert('Kon batch timer niet instellen');
+                      }
+                    }}
+                    style={{
+                      backgroundColor: '#ffd700',
+                      color: 'black',
+                      padding: '12px',
+                      border: 'none',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    TIMER INSTELLEN
+                  </button>
+                  
+                  <div style={{ fontSize: '12px', color: '#aaa', marginTop: '15px', padding: '10px', backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: '4px' }}>
+                    <div style={{ marginBottom: '5px', fontWeight: 'bold' }}>Hoe werkt de Batch Timer?</div>
+                    <ul style={{ paddingLeft: '20px', fontSize: '10px' }}>
+                      <li style={{ marginBottom: '5px' }}>De timer start zodra je deze instelt</li>
+                      <li style={{ marginBottom: '5px' }}>Wanneer de timer afloopt, wordt de batch automatisch gemarkeerd als "sold out"</li>
+                      <li style={{ marginBottom: '5px' }}>De timer wordt op de homepage getoond bij de batch info</li>
+                      <li style={{ marginBottom: '5px' }}>De timer biedt gebruikers visuele feedback over hoe lang ze nog hebben om te minten</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
               
               {/* Tab content */}
               <div>
