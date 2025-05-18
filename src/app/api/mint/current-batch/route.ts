@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as storage from '@/lib/storage-wrapper-db-only';
 import { sql } from '@vercel/postgres';
+import { Batch } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,105 +17,16 @@ interface CurrentBatchResponse {
   cooldownDuration: number;
 }
 
-// Helper function for CORS headers
+// CORS headers helper function
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
 
-export async function GET(request: NextRequest) {
-  // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new NextResponse(null, {
-      status: 200,
-      headers: corsHeaders()
-    });
-  }
-
-  // Get current batch information
-  try {
-    const [batches, currentBatchInfo] = await Promise.all([
-      storage.getBatches(),
-      storage.getCurrentBatch()
-    ]);
-    
-    // Uitgebreide logging toevoegen
-    console.log('API current-batch: Batches uit database:', JSON.stringify(batches, null, 2));
-    console.log('API current-batch: Current batch info:', JSON.stringify(currentBatchInfo, null, 2));
-    
-    if (!currentBatchInfo) {
-      console.error('API current-batch: Geen current batch info gevonden');
-      return NextResponse.json(
-        { error: 'Current batch info not found' },
-        { status: 500 }
-      );
-    }
-    
-    const { currentBatch, soldOutAt } = currentBatchInfo;
-    
-    // Log huidige batch info
-    console.log(`API current-batch: Current batch: ${currentBatch}, soldOutAt: ${soldOutAt}`);
-    
-    const currentBatchObj = batches.find(b => b.id === currentBatch);
-    
-    if (!currentBatchObj) {
-      console.error(`API current-batch: Batch ${currentBatch} niet gevonden in batches`);
-      return NextResponse.json(
-        { error: `Batch ${currentBatch} not found` },
-        { status: 404 }
-      );
-    }
-    
-    // Log huidige batch object
-    console.log('API current-batch: Current batch object:', JSON.stringify(currentBatchObj, null, 2));
-    
-    const timeLeft = soldOutAt ? (new Date().getTime() - soldOutAt) : 0;
-    
-    // Log de huidige batch toestand met berekend timeLeft
-    console.log(`API current-batch: isSoldOut: ${currentBatchObj.isSoldOut}, soldOutAt: ${soldOutAt}, timeLeft: ${timeLeft}`);
-    
-    // Calculate total and minted tigers for the current batch
-    const totalTigers = currentBatchObj.ordinals || 66;
-    
-    // Voor backward compatibility, check eerst op mintedTigers en val terug op mintedWallets * 2
-    const mintedTigers = currentBatchObj.mintedTigers !== undefined
-      ? currentBatchObj.mintedTigers
-      : currentBatchObj.mintedWallets * 2;
-      
-    const availableTigers = totalTigers - mintedTigers;
-    
-    const response: CurrentBatchResponse = {
-      currentBatch: currentBatch,
-      totalTigers: totalTigers,
-      mintedTigers: mintedTigers,
-      availableTigers: availableTigers,
-      soldOut: currentBatchObj.isSoldOut && !!soldOutAt,
-      soldOutAt: soldOutAt,
-      timeLeft: timeLeft,
-      cooldownDuration: 900000 // Default to 15 minutes
-    };
-    
-    // Force no-cache headers
-    return NextResponse.json(response, {
-      headers: {
-        'Cache-Control': 'no-store, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    });
-  } catch (error) {
-    console.error('Error getting current batch:', error);
-    return NextResponse.json(
-      { error: 'Failed to get current batch status' },
-      { status: 500 }
-    );
-  }
-}
-
-// Helper function to get cooldown duration for a specific batch
+// Helper function to get the cooldown duration for a batch
 async function getBatchCooldownMilliseconds(batchId: number): Promise<number> {
   try {
     // First, try to get batch-specific cooldown
@@ -146,11 +58,11 @@ async function getBatchCooldownMilliseconds(batchId: number): Promise<number> {
   } catch (error) {
     console.error('Error getting batch cooldown:', error);
     // Default to 15 minutes in case of error
-    return 15 * 60 * 1000; // 15 minutes in milliseconds
+    return 15 * 60 * 1000;
   }
 }
 
-// Helper function to convert cooldown settings to milliseconds
+// Helper function to convert time units to milliseconds
 function convertToMilliseconds(value: number, unit: string): number {
   switch (unit) {
     case 'minutes':
@@ -161,6 +73,229 @@ function convertToMilliseconds(value: number, unit: string): number {
       return value * 24 * 60 * 60 * 1000;
     default:
       return value * 60 * 1000; // Default to minutes
+  }
+}
+
+// Helper function to find the next available batch
+async function findNextAvailableBatch(currentBatchId: number): Promise<number> {
+  try {
+    const batches = await storage.getBatches();
+    
+    // Start looking from the next batch
+    for (let i = currentBatchId + 1; i <= 16; i++) {
+      const batch = batches.find(b => b.id === i);
+      
+      // If batch exists and is not sold out, return it
+      if (batch && !batch.isSoldOut) {
+        return i;
+      }
+    }
+    
+    // If all batches are sold out, stay on current batch
+    return currentBatchId;
+  } catch (error) {
+    console.error('Error finding next available batch:', error);
+    return currentBatchId;
+  }
+}
+
+// Check if a batch has an active timer
+async function checkBatchTimer(batchId: number): Promise<{ active: boolean, endTime: number | null, timeLeft: number | null }> {
+  try {
+    // Check if batch_durations table exists
+    const { rows: tableCheck } = await sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'batch_durations'
+      ) as exists
+    `;
+    
+    if (!tableCheck[0].exists) {
+      // Tabel bestaat niet, geen timer actief
+      return { active: false, endTime: null, timeLeft: null };
+    }
+    
+    // Haal timer informatie op
+    const { rows } = await sql`
+      SELECT * FROM batch_durations 
+      WHERE batch_id = ${batchId}
+    `;
+    
+    if (rows.length === 0 || !rows[0].start_time || !rows[0].end_time) {
+      // Geen timer gevonden of timer is niet actief
+      return { active: false, endTime: null, timeLeft: null };
+    }
+    
+    const now = Date.now();
+    const endTime = rows[0].end_time;
+    
+    // Controleer of de timer nog actief is
+    if (now > endTime) {
+      // Timer is verlopen, markeer batch als sold out
+      await markBatchAsSoldOutDueToTimer(batchId);
+      return { active: false, endTime, timeLeft: 0 };
+    }
+    
+    // Timer is actief, bereken resterende tijd
+    const timeLeft = endTime - now;
+    return { active: true, endTime, timeLeft };
+  } catch (error) {
+    console.error('Error checking batch timer:', error);
+    return { active: false, endTime: null, timeLeft: null };
+  }
+}
+
+// Markeer een batch als sold out wegens timer
+async function markBatchAsSoldOutDueToTimer(batchId: number): Promise<void> {
+  try {
+    console.log(`Batch ${batchId} timer expired, marking as sold out`);
+    
+    // Haal alle batches op
+    const batches = await storage.getBatches();
+    
+    // Vind de batch
+    const batch = batches.find(b => b.id === batchId);
+    if (!batch) {
+      console.error(`Batch ${batchId} not found`);
+      return;
+    }
+    
+    // Markeer als sold out
+    if (!batch.isSoldOut) {
+      batch.isSoldOut = true;
+      
+      // Update in database
+      await storage.saveBatches(batches);
+      
+      // Update current batch info
+      const currentBatchInfo = await storage.getCurrentBatch();
+      if (currentBatchInfo.currentBatch === batchId) {
+        await storage.saveCurrentBatch({
+          currentBatch: batchId,
+          soldOutAt: Date.now()
+        });
+      }
+      
+      console.log(`Batch ${batchId} marked as sold out due to timer expiration`);
+    }
+  } catch (error) {
+    console.error('Error marking batch as sold out:', error);
+  }
+}
+
+export async function GET(request: NextRequest) {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: corsHeaders()
+    });
+  }
+
+  // Get current batch information
+  try {
+    const { searchParams } = new URL(request.url);
+    
+    // Haal current batch info op uit storage
+    const currentBatchInfo = await storage.getCurrentBatch();
+    const currentBatchId = currentBatchInfo.currentBatch;
+    const soldOutAt = currentBatchInfo.soldOutAt;
+    
+    // Haal alle batches op
+    const batches = await storage.getBatches();
+    
+    // Vind huidige batch
+    const currentBatch = batches.find(batch => batch.id === currentBatchId);
+    
+    if (!currentBatch) {
+      return NextResponse.json({ error: 'Current batch not found' }, { status: 404 });
+    }
+    
+    // Controleer batch timer
+    const timerStatus = await checkBatchTimer(currentBatchId);
+    
+    // Check als de batch sold out is
+    if (currentBatch.isSoldOut || soldOutAt) {
+      // Als er een sold out time is, bereken cooldown tijd
+      if (soldOutAt) {
+        const now = Date.now();
+        const cooldownDuration = await getBatchCooldownMilliseconds(currentBatchId);
+        const timeSinceSoldOut = now - soldOutAt;
+        
+        // Als cooldown voorbij is, ga naar volgende batch
+        if (timeSinceSoldOut >= cooldownDuration) {
+          const nextBatchId = await findNextAvailableBatch(currentBatchId);
+          
+          if (nextBatchId !== currentBatchId) {
+            console.log(`Moving from batch ${currentBatchId} to ${nextBatchId} as cooldown period has elapsed`);
+            await storage.saveCurrentBatch({
+              currentBatch: nextBatchId,
+              soldOutAt: null
+            });
+            
+            // Haal nieuwe batch info op
+            const newBatch = batches.find(batch => batch.id === nextBatchId);
+            
+            // Check timer voor nieuwe batch
+            const newTimerStatus = await checkBatchTimer(nextBatchId);
+            
+            return NextResponse.json({
+              currentBatch: nextBatchId,
+              mintedWallets: newBatch?.mintedWallets || 0,
+              mintedTigers: newBatch?.mintedTigers || 0,
+              totalTigers: newBatch?.ordinals || 66,
+              soldOut: newBatch?.isSoldOut || false,
+              price: newBatch?.price || 0,
+              hasTimer: newTimerStatus.active,
+              timeLeft: newTimerStatus.timeLeft
+            });
+          }
+        }
+        
+        // Cooldown periode is nog niet voorbij
+        return NextResponse.json({
+          currentBatch: currentBatchId,
+          mintedWallets: currentBatch.mintedWallets,
+          mintedTigers: currentBatch.mintedTigers || (currentBatch.mintedWallets * 2),
+          totalTigers: currentBatch.ordinals,
+          soldOut: true,
+          soldOutAt,
+          cooldownDuration,
+          timeLeft: cooldownDuration - timeSinceSoldOut,
+          price: currentBatch.price
+        });
+      }
+    }
+    
+    // Als er een actieve timer is, retourneer die informatie
+    if (timerStatus.active) {
+      // Timer is actief, toon timer info
+      return NextResponse.json({
+        currentBatch: currentBatchId,
+        mintedWallets: currentBatch.mintedWallets,
+        mintedTigers: currentBatch.mintedTigers || (currentBatch.mintedWallets * 2),
+        totalTigers: currentBatch.ordinals,
+        soldOut: currentBatch.isSoldOut,
+        price: currentBatch.price,
+        hasTimer: true,
+        timerEndTime: timerStatus.endTime,
+        timeLeft: timerStatus.timeLeft
+      });
+    }
+    
+    // Normale respons zonder timer of sold out status
+    return NextResponse.json({
+      currentBatch: currentBatchId,
+      mintedWallets: currentBatch.mintedWallets,
+      mintedTigers: currentBatch.mintedTigers || (currentBatch.mintedWallets * 2),
+      totalTigers: currentBatch.ordinals,
+      soldOut: currentBatch.isSoldOut,
+      price: currentBatch.price,
+      hasTimer: false
+    });
+  } catch (error: any) {
+    console.error('Error getting current batch:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 

@@ -42,4 +42,11 @@ export interface MintedWallet {
   batchId: number;
   quantity: number;
   timestamp: string;
+}
+
+export interface BatchDuration {
+  batchId: number;
+  startTime: number | null; // Timestamp wanneer de batch begint
+  endTime: number | null;   // Timestamp wanneer de batch eindigt
+  durationMinutes: number;  // Duur in minuten
 } 
