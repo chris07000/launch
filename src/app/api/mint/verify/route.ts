@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const searchParams = new URL(request.url).searchParams;
     const batchIdParam = searchParams.get('batchId');
     const address = searchParams.get('address');
+    const checkAllBatches = searchParams.get('checkAllBatches') === 'true';
 
     if (!batchIdParam || !address) {
       return NextResponse.json({ 
@@ -43,7 +44,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         eligible: false,
         reason: 'batch_sold_out',
-        message: `Batch #${requestedBatchId} is sold out`
+        message: `Batch #${requestedBatchId} is sold out`,
+        whitelistedBatch: whitelistedBatchId
       });
     }
     
@@ -57,7 +59,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         eligible: false,
         reason: 'already_minted',
-        message: `Address has already minted from batch #${requestedBatchId}`
+        message: `Address has already minted from batch #${requestedBatchId}`,
+        whitelistedBatch: whitelistedBatchId
+      });
+    }
+    
+    // If checkAllBatches is true and the wallet is found in any batch, report it as eligible
+    // for the batch it's actually whitelisted for
+    if (checkAllBatches && whitelistedBatchId) {
+      return NextResponse.json({
+        eligible: whitelistedBatchId === requestedBatchId,
+        batchId: requestedBatchId,
+        whitelistedBatch: whitelistedBatchId,
+        reason: whitelistedBatchId === requestedBatchId ? undefined : 'not_whitelisted_for_batch',
+        message: whitelistedBatchId === requestedBatchId ?
+          `Address is eligible to mint from batch #${requestedBatchId}` :
+          `Address is whitelisted for batch #${whitelistedBatchId}, not for batch #${requestedBatchId}`
       });
     }
     

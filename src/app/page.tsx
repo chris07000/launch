@@ -377,7 +377,7 @@ export default function HomePage() {
       
       // Nu pas de wallet check uitvoeren met de meest recente data
       const timestamp = Date.now();
-      const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}&t=${timestamp}`, {
+      const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}&t=${timestamp}&checkAllBatches=true`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate'
