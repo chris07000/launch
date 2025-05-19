@@ -406,25 +406,8 @@ export default function HomePage() {
       } 
       // Als wallet gewhitelist is voor een andere batch
       else if (data.whitelistedBatch) {
-        // Als de batch waar deze wallet voor is gewhitelist sold out is
-        if (data.reason === 'batch_sold_out') {
-          const activeBatchId = data.currentBatch || currentBatch || 1;
-          
-          // KRITIEKE FIX: als batch 1 sold out wordt gerapporteerd maar er zijn 0 tigers, forceer een override
-          if (currentBatch === 1 && mintedTigers === 0) {
-            setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
-          } else {
-            setCheckResult(`⚠️ Batch #${currentBatch} is sold out\nThe current active batch is #${activeBatchId}\nYour wallet is whitelisted for Batch #${data.whitelistedBatch}`);
-          }
-        }
-        // Wallet is gewhitelist voor een andere, niet sold-out batch
-        else if (data.reason === 'not_whitelisted_for_batch') {
-          setCheckResult(`⚠️ This address is whitelisted for Batch #${data.whitelistedBatch}, not for Batch #${currentBatch}`);
-        }
-        // Andere status, maar wel gewhitelist
-        else {
-          setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
-        }
+        // Toon altijd een positief bericht in het groen als de wallet is gewhitelist voor een batch
+        setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
       } 
       // Wallet is niet gewhitelist voor enige batch
       else {
@@ -884,9 +867,9 @@ export default function HomePage() {
                   <div style={{ 
                     fontSize: '12px',
                     padding: '12px',
-                    backgroundColor: checkResult.includes('🎉') ? 'rgba(74, 222, 128, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                    border: `1px solid ${checkResult.includes('🎉') ? '#4ade80' : '#ef4444'}`,
-                    color: checkResult.includes('🎉') ? '#4ade80' : '#ef4444',
+                    backgroundColor: checkResult.includes('🎉') || checkResult.includes('whitelisted for Batch') ? 'rgba(74, 222, 128, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    border: `1px solid ${checkResult.includes('🎉') || checkResult.includes('whitelisted for Batch') ? '#4ade80' : '#ef4444'}`,
+                    color: checkResult.includes('🎉') || checkResult.includes('whitelisted for Batch') ? '#4ade80' : '#ef4444',
                     maxWidth: '500px',
                     margin: '10px auto 0',
                     whiteSpace: 'pre-line'
