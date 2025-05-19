@@ -1801,6 +1801,18 @@ export default function AdminPage() {
                             >
                               BULK WHITELIST TOOL →
                             </Link>
+                            <Link 
+                              href="/admin/batch-migration"
+                              style={{
+                                color: '#ffd700',
+                                fontSize: '10px',
+                                textDecoration: 'underline',
+                                padding: '4px 8px',
+                                marginLeft: '10px'
+                              }}
+                            >
+                              BATCH MIGRATION TOOL →
+                            </Link>
                           </div>
                           
                           {error && (
