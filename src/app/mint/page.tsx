@@ -370,35 +370,16 @@ export default function Home() {
   };
 
   const verifyAddress = async () => {
-    // Reset states
-    setError('');
-    setCanMint(false);
-    setBatchNumber(0);
-    
-    // Als de batch sold out is, voorkom verificatie
-    if (isSoldOut) {
-      setError(`Batch ${currentBatch} is sold out. Please wait for the next batch to open.`);
-      return;
-    }
-    
-    // Check for empty address
-    if (!btcAddress.trim()) {
-      setError('Please enter your BTC address');
+    if (!btcAddress || !btcAddress.startsWith('bc1p')) {
+      setError('Please enter a valid bc1p address');
       return;
     }
 
-    // Check if address starts with bc1p (taproot address format) for Ordinals
-    if (!btcAddress.startsWith('bc1p')) {
-      setError('Please enter a valid Taproot address (bc1p...) for receiving Ordinals');
-      return;
-    }
+    setError('');
+    setIsLoading(true);
 
     try {
       // Call the API to verify if this address is eligible to mint
-      // For demo purposes, we're just using a simplified check
-      // In a real implementation, this would check against a whitelist or other criteria
-      
-      // Get the current batch info to see if there's space available
       const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}`);
       
       if (!response.ok) {
@@ -409,20 +390,16 @@ export default function Home() {
       const verificationData = await response.json();
       
       if (!verificationData.eligible) {
-        if (verificationData.reason === 'not_whitelisted') {
-          if (verificationData.whitelistedBatch) {
-            setError(`This address is whitelisted for Batch #${verificationData.whitelistedBatch}, not for current Batch #${currentBatch}`);
-          } else {
-            setError(`This address is not whitelisted for any batch`);
-          }
+        if (verificationData.reason === 'invalid_address') {
+          setError('Please enter a valid bc1p address');
         } else if (verificationData.reason === 'already_minted') {
           setError(`This address has already minted from batch ${currentBatch}`);
         } else if (verificationData.reason === 'batch_sold_out') {
           setError(`Batch ${currentBatch} is sold out`);
         } else if (verificationData.reason === 'max_tigers_reached') {
-          setError(`This address has already minted the maximum number of Tigers (${maxTigersPerWallet})`);
+          setError(`This address has reached the maximum limit of Tigers`);
         } else {
-          setError(`Address is not eligible: ${verificationData.reason}`);
+          setError(`Address verification failed: ${verificationData.message || verificationData.reason}`);
         }
         return;
       }
@@ -430,8 +407,15 @@ export default function Home() {
       // Address is eligible to mint
       setCanMint(true);
       setBatchNumber(currentBatch);
+      
+      // Show success message with remaining mints info
+      if (verificationData.remainingMints) {
+        console.log(`Address verified successfully. Can mint ${verificationData.remainingMints} more Tiger(s).`);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to verify address');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -769,7 +753,7 @@ export default function Home() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                 <div style={{ fontSize: '10px', color: '#aaa' }}>ELIGIBILITY:</div>
-                <div style={{ fontSize: '10px' }}>GTD Holders Only</div>
+                <div style={{ fontSize: '10px' }}>Open to everyone with a bc1p address</div>
               </div>
               
               {/* Progress Bar */}
@@ -841,7 +825,7 @@ export default function Home() {
                 <br />
                 • Total supply: 999 Bitcoin Tigers
                 <br />
-                • Only GTD holders can mint
+                • Open to everyone with a bc1p address
               </div>
             </div>
           </div>
@@ -1335,7 +1319,7 @@ export default function Home() {
               <br />
               • Total supply: 999 Bitcoin Tigers
               <br />
-              • Only GTD holders can mint
+              • Open to everyone with a bc1p address
             </div>
           </div>
         )}

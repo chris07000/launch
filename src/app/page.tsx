@@ -377,7 +377,7 @@ export default function HomePage() {
       
       // Nu pas de wallet check uitvoeren met de meest recente data
       const timestamp = Date.now();
-      const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}&t=${timestamp}&checkAllBatches=true`, {
+      const response = await fetch(`/api/mint/verify?batchId=${currentBatch}&address=${encodeURIComponent(btcAddress)}&t=${timestamp}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -385,33 +385,23 @@ export default function HomePage() {
       });
       const data = await response.json();
       console.log('Wallet check response:', data);
-      
-      // KRITIEKE HOTFIX: Forceer hier een controle op contradictie en negeer de sold_out status als minted 0 is
-      const ignoreErrorState = 
-        data.reason === 'batch_sold_out' && 
-        data.whitelistedBatch === 1 && 
-        mintedTigers === 0 && 
-        !isSoldOut;
-        
-      if (ignoreErrorState) {
-        console.log('KRITIEKE OVERRIDE: Negeren van sold out status omdat er 0 tigers gemint zijn');
-        // Override de response data lokaal
-        data.eligible = true;
-        data.reason = '';
-      }
 
-      // Als wallet eligible is voor de huidige batch
+      // Handle the response from the new open mint system
       if (data.eligible) {
-        setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch || data.batchId || currentBatch}`);
-      } 
-      // Als wallet gewhitelist is voor een andere batch
-      else if (data.whitelistedBatch) {
-        // Toon altijd een positief bericht in het groen als de wallet is gewhitelist voor een batch
-        setCheckResult(`🎉 This address is whitelisted for Batch #${data.whitelistedBatch}`);
-      } 
-      // Wallet is niet gewhitelist voor enige batch
-      else {
-        setCheckResult(`🐯 This address is not whitelisted\nYou are not bullish enough`);
+        setCheckResult(`🎉 This address is eligible to mint from Batch #${data.batchId}!\n${data.remainingMints ? `You can mint ${data.remainingMints} more Tiger(s)` : 'Ready to mint!'}`);
+      } else {
+        // Handle different error cases
+        if (data.reason === 'invalid_address') {
+          setCheckResult('❌ Invalid address format\nPlease enter a valid bc1p address');
+        } else if (data.reason === 'batch_sold_out') {
+          setCheckResult('⏳ Current batch is sold out\nNext batch will be available soon');
+        } else if (data.reason === 'already_minted') {
+          setCheckResult('✅ You already minted from this batch\nWait for the next batch to mint again');
+        } else if (data.reason === 'max_tigers_reached') {
+          setCheckResult('🎯 Maximum limit reached\nYou have minted the maximum number of Tigers');
+        } else {
+          setCheckResult('❌ Unable to verify address\nPlease try again later');
+        }
       }
     } catch (error) {
       console.error('Error checking wallet:', error);
@@ -513,7 +503,7 @@ export default function HomePage() {
               fontSize: isMobile ? '10px' : '12px',
               lineHeight: '1.6'
             }}>
-              Join an elite community of 999 Tiger holders who earn real Bitcoin rewards through innovative gameplay and staking mechanics
+              Join an open community of 999 Tiger holders who earn real Bitcoin rewards through innovative gameplay and staking mechanics. Now accessible to everyone!
             </div>
             {timeToMint && timeToMint > 0 ? (
               <button
@@ -803,7 +793,15 @@ export default function HomePage() {
                   fontSize: '14px', 
                   marginBottom: '10px'
                 }}>
-                  CHECK YOUR WALLET STATUS
+                  CHECK YOUR WALLET ELIGIBILITY
+                </div>
+                <div style={{ 
+                  fontSize: '10px', 
+                  color: '#aaa', 
+                  marginBottom: '10px',
+                  textAlign: 'center'
+                }}>
+                  Open to everyone! Enter any valid bc1p address to mint
                 </div>
                 <div style={{ 
                   display: 'flex',
@@ -867,9 +865,9 @@ export default function HomePage() {
                   <div style={{ 
                     fontSize: '12px',
                     padding: '12px',
-                    backgroundColor: checkResult.includes('🎉') || checkResult.includes('whitelisted for Batch') ? 'rgba(74, 222, 128, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                    border: `1px solid ${checkResult.includes('🎉') || checkResult.includes('whitelisted for Batch') ? '#4ade80' : '#ef4444'}`,
-                    color: checkResult.includes('🎉') || checkResult.includes('whitelisted for Batch') ? '#4ade80' : '#ef4444',
+                    backgroundColor: checkResult.includes('🎉') || checkResult.includes('eligible') || checkResult.includes('already minted') ? 'rgba(74, 222, 128, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    border: `1px solid ${checkResult.includes('🎉') || checkResult.includes('eligible') || checkResult.includes('already minted') ? '#4ade80' : '#ef4444'}`,
+                    color: checkResult.includes('🎉') || checkResult.includes('eligible') || checkResult.includes('already minted') ? '#4ade80' : '#ef4444',
                     maxWidth: '500px',
                     margin: '10px auto 0',
                     whiteSpace: 'pre-line'
@@ -954,10 +952,13 @@ export default function HomePage() {
               color: '#ddd'
             }}>
               <p style={{ marginBottom: '20px' }}>
-                Welcome to the Bitcoin Tiger Collective - where gaming meets Bitcoin rewards. Our exclusive collection of 999 Tiger Ordinals combines unique digital art with real financial utility on the Bitcoin blockchain.
+                Welcome to the Bitcoin Tiger Collective - where gaming meets Bitcoin rewards. Our collection of 999 Tiger Ordinals combines unique digital art with real financial utility on the Bitcoin blockchain.
               </p>
               <p style={{ marginBottom: '20px' }}>
                 Every Tiger in our collective is more than just art - it's your key to earning real Bitcoin rewards. Through our innovative staking system, your Tiger works for you, generating Bitcoin treasures while you hold.
+              </p>
+              <p style={{ marginBottom: '20px' }}>
+                <strong>Now Open to Everyone!</strong> We've made Bitcoin Tigers accessible to all Bitcoin enthusiasts. No more exclusive whitelist - simply have a valid bc1p address and you can join the collective.
               </p>
               <p style={{ marginBottom: '20px' }}>
                 Ready to maximize your rewards? Here's how it works:
@@ -967,6 +968,7 @@ export default function HomePage() {
                 listStyle: 'none',
                 marginBottom: '20px'
               }}>
+                <li style={{ marginBottom: '10px' }}>• Mint your Tiger with any valid bc1p Bitcoin address</li>
                 <li style={{ marginBottom: '10px' }}>• Stake your Tiger for 7 days to earn mysterious Bitcoin treasure chests</li>
                 <li style={{ marginBottom: '10px' }}>• Level up your Tiger using BTC to unlock higher reward tiers</li>
                 <li style={{ marginBottom: '10px' }}>• Earn multiple treasure chests per stake at higher levels</li>

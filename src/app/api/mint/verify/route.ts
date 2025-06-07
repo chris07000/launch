@@ -3,6 +3,11 @@ import { sql } from '@vercel/postgres';
 
 export const dynamic = 'force-dynamic';
 
+// Helper function to validate bc1p address format
+function isValidBc1pAddress(address: string): boolean {
+  return address.startsWith('bc1p') && address.length >= 62 && address.length <= 64;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = new URL(request.url).searchParams;
@@ -20,12 +25,16 @@ export async function GET(request: NextRequest) {
 
     const requestedBatchId = parseInt(batchIdParam, 10);
 
-    // Direct whitelist check with SQL
-    const whitelistResult = await sql`SELECT * FROM whitelist WHERE address = ${address}`;
-    const whitelistEntry = whitelistResult.rows[0];
-    const whitelistedBatchId = whitelistEntry ? whitelistEntry.batch_id : null;
-    
-    console.log(`Checking whitelist for ${address}: ${whitelistEntry ? 'FOUND for batch ' + whitelistedBatchId : 'NOT FOUND'}`);
+    // Validate address format
+    if (!isValidBc1pAddress(address)) {
+      return NextResponse.json({
+        eligible: false,
+        reason: 'invalid_address',
+        message: 'Invalid Bitcoin address format. Must be a valid bc1p address'
+      });
+    }
+
+    console.log(`Checking eligibility for ${address} on batch ${requestedBatchId}`);
     
     // Get batch information
     const batchesResult = await sql`SELECT * FROM batches WHERE id = ${requestedBatchId}`;
@@ -44,8 +53,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         eligible: false,
         reason: 'batch_sold_out',
-        message: `Batch #${requestedBatchId} is sold out`,
-        whitelistedBatch: whitelistedBatchId
+        message: `Batch #${requestedBatchId} is sold out`
       });
     }
     
@@ -59,43 +67,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         eligible: false,
         reason: 'already_minted',
-        message: `Address has already minted from batch #${requestedBatchId}`,
-        whitelistedBatch: whitelistedBatchId
+        message: `Address has already minted from batch #${requestedBatchId}`
       });
     }
+
+    // Check if wallet has reached maximum tigers limit across all batches
+    const totalMintedResult = await sql`
+      SELECT SUM(quantity) as total_minted FROM minted_wallets 
+      WHERE address = ${address}
+    `;
     
-    // If checkAllBatches is true and the wallet is found in any batch, report it as eligible
-    // for the batch it's actually whitelisted for
-    if (checkAllBatches && whitelistedBatchId) {
+    const totalMinted = totalMintedResult.rows[0]?.total_minted || 0;
+    const maxTigersPerWallet = 3; // Adjust this limit as needed
+    
+    if (totalMinted >= maxTigersPerWallet) {
       return NextResponse.json({
-        eligible: whitelistedBatchId === requestedBatchId,
-        batchId: requestedBatchId,
-        whitelistedBatch: whitelistedBatchId,
-        reason: whitelistedBatchId === requestedBatchId ? undefined : 'not_whitelisted_for_batch',
-        message: whitelistedBatchId === requestedBatchId ?
-          `Address is eligible to mint from batch #${requestedBatchId}` :
-          `Address is whitelisted for batch #${whitelistedBatchId}, not for batch #${requestedBatchId}`
+        eligible: false,
+        reason: 'max_tigers_reached',
+        message: `Address has reached the maximum limit of ${maxTigersPerWallet} Tigers`
       });
     }
     
-    // Check if address is whitelisted for the requested batch
-    if (whitelistedBatchId === requestedBatchId) {
-      return NextResponse.json({
-        eligible: true,
-        batchId: requestedBatchId,
-        message: `Address is eligible to mint from batch #${requestedBatchId}`
-      });
-    }
+    // If we get here, the address is eligible to mint
+    console.log(`Address ${address} is eligible to mint from batch ${requestedBatchId}`);
     
-    // Default response - not in whitelist or whitelisted for a different batch
     return NextResponse.json({
-      eligible: false,
-      reason: 'not_whitelisted',
-      whitelistedBatch: whitelistedBatchId,
-      message: whitelistedBatchId ? 
-        `Address is whitelisted for batch #${whitelistedBatchId}, not for batch #${requestedBatchId}` :
-        'Address is not whitelisted for any batch'
+      eligible: true,
+      batchId: requestedBatchId,
+      message: `Address is eligible to mint from batch #${requestedBatchId}`,
+      totalMinted: totalMinted,
+      remainingMints: maxTigersPerWallet - totalMinted
     });
+    
   } catch (error) {
     console.error('Verify endpoint error:', error);
     return NextResponse.json({
